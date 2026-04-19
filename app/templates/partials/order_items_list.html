@@ -1,0 +1,66 @@
+{% if order.items_activos %}
+    <ul class="filament-list">
+        {% for item in order.items_activos %}
+            <li class="order-item-row p-4 border-b border-gray-200 hover-row" data-order-item-id="{{ item.id }}">
+                <div class="order-item-main">
+                    <div class="order-item-thumb">
+                        {% if item.producto and item.producto.imagen_url %}
+                            <img src="{{ item.producto.imagen_url }}" alt="{{ item.producto.nombre }}">
+                        {% else %}
+                            <span>{{ item.producto.nombre[:1] if item.producto else '?' }}</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="order-item-copy">
+                        <div class="flex items-center gap-2 mb-1 flex-wrap">
+                            <strong class="font-bold text-gray-800">{{ item.producto.nombre if item.producto else 'Producto eliminado' }}</strong>
+                            <span class="badge badge-{{ item.estado|lower }} text-[10px]">{{ item.estado }}</span>
+                        </div>
+                        <div class="text-sm text-muted mb-1">
+                            {{ item.producto.categoria.nombre if item.producto and item.producto.categoria else 'General' }} | {{ item.cantidad }} x {{ item.precio_unitario|money }}
+                        </div>
+                        <div class="flex gap-3 text-xs font-medium text-gray-500 flex-wrap">
+                            <span>Subtotal: <strong class="text-gray-800">{{ item.subtotal|money }}</strong></span>
+                            <span>{{ 'Pasa por cocina' if item.requiere_cocina else 'Entrega directa' }}</span>
+                        </div>
+                        {% if item.notas %}
+                            <div class="mt-2 bg-yellow-50 text-yellow-800 text-xs p-2 rounded border border-yellow-100 font-medium">
+                                <i class="fa-solid fa-note-sticky mr-1"></i> Notas: {{ item.notas }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="action-stack">
+                    {% if can_prepare and item.requiere_cocina and item.estado == 'pendiente' %}
+                        <form method="post" action="{{ url_for('web.preparar_item', item_id=item.id) }}" data-confirm-title="Marcar listo" data-confirm-message="El producto {{ item.producto.nombre if item.producto else 'seleccionado' }} pasará a listo para entrega.">
+                            <button class="button button-warning button-small shadow-sm" type="submit">Marcar listo</button>
+                        </form>
+                    {% endif %}
+
+                    {% if can_deliver and item.estado == 'listo' %}
+                        <form method="post" action="{{ url_for('web.entregar_item', item_id=item.id) }}" data-confirm-title="Entregar platillo" data-confirm-message="Se marcará {{ item.producto.nombre if item.producto else 'el producto' }} como entregado a la mesa.">
+                            <button class="button button-success button-small shadow-sm" type="submit">Entregar</button>
+                        </form>
+                    {% endif %}
+
+                    {% if user_can(current_user, 'ordenes') and order.estado == 'abierta' and not item.pagado and not division_locked and (item.estado != 'entregado' or owner_user) %}
+                        <form method="post" action="{{ url_for('web.cancelar_item', item_id=item.id) }}" data-confirm-title="Cancelar item" data-confirm-message="Se cancelará {{ item.producto.nombre if item.producto else 'este item' }} dentro de la orden #{{ order.id }}.">
+                            <button class="button button-ghost button-small text-danger border-danger hover:bg-red-50" type="submit">
+                                <i class="fa-solid fa-xmark"></i> Cancelar
+                            </button>
+                        </form>
+                    {% endif %}
+
+                    {% if item.estado == 'entregado' and not owner_user and order.estado == 'abierta' and not item.pagado %}
+                        <span class="text-[10px] text-muted text-right max-w-[120px]">Solo admin cancela entregados.</span>
+                    {% endif %}
+                </div>
+            </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <div class="empty-state p-8 text-center">
+        <p class="text-sm text-muted">Esta orden aún no tiene ítems activos.</p>
+    </div>
+{% endif %}

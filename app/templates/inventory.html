@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="filament-dashboard p-4 md:p-6">
+
+    <header class="flex justify-between items-end mb-6">
+        <div>
+            <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">Inventario</p>
+            <h1 class="text-2xl font-bold text-gray-800">
+                <i class="fa-solid fa-boxes-stacked mr-2 text-muted"></i> Movimientos y stock
+            </h1>
+            <p class="text-sm text-muted mt-1">
+                Consulta existencias y registra nuevos movimientos desde esta sección.
+            </p>
+        </div>
+
+        <div class="flex gap-2">
+            <a class="button button-primary hover-lift shadow-sm" href="{{ url_for('web.nuevo_movimiento_inventario') }}">
+                <i class="fa-solid fa-plus mr-2"></i> Nuevo movimiento
+            </a>
+            <a class="button button-secondary hover-lift shadow-sm" href="{{ url_for('web.exportar_reporte', kind='inventario') }}">
+                <i class="fa-solid fa-file-csv mr-2"></i> CSV
+            </a>
+        </div>
+    </header>
+
+    <article class="panel mb-6">
+        <div class="panel-header border-b bg-gray-50">
+            <div>
+                <h2 class="panel-title font-bold">
+                    <i class="fa-solid fa-warehouse mr-2 text-muted"></i> Productos controlados
+                </h2>
+                <p class="text-sm text-muted mt-1">Vista general del stock y del estado de control por producto.</p>
+            </div>
+        </div>
+
+        <div class="panel-body p-0">
+            {% if products %}
+                <div class="table-wrap no-border">
+                    <table class="filament-table">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Categoría</th>
+                                <th>Stock</th>
+                                <th>Control</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in products %}
+                                <tr class="hover-row">
+                                    <td class="font-bold text-sm">{{ product.nombre }}</td>
+                                    <td>{{ product.categoria.nombre if product.categoria else '-' }}</td>
+                                    <td>
+                                        {% if product.maneja_stock %}
+                                            <span class="{% if product.stock_actual <= 5 %}text-danger font-bold{% else %}font-medium{% endif %}">
+                                                {{ product.stock_actual }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">No aplica</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if product.maneja_stock %}
+                                            <span class="badge badge-pagada">Activo</span>
+                                        {% else %}
+                                            <span class="badge badge-cancelada">Sin control</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state p-8 text-center">
+                    <div class="empty-icon bg-gray-light text-muted mx-auto mb-3">
+                        <i class="fa-solid fa-box-open text-2xl"></i>
+                    </div>
+                    <p class="text-sm font-medium text-muted">No hay productos cargados.</p>
+                </div>
+            {% endif %}
+        </div>
+    </article>
+
+    <article class="panel">
+        <div class="panel-header border-b bg-gray-50">
+            <div>
+                <h2 class="panel-title font-bold">
+                    <i class="fa-solid fa-clock-rotate-left mr-2 text-muted"></i> Movimientos recientes
+                </h2>
+                <p class="text-sm text-muted mt-1">Últimos registros de entradas, salidas y ajustes de inventario.</p>
+            </div>
+        </div>
+
+        <div class="panel-body p-0">
+            {% if movements %}
+                <div class="table-wrap no-border">
+                    <table class="filament-table">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Tipo</th>
+                                <th>Unidades</th>
+                                <th>Usuario</th>
+                                <th>Fecha</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for movement in movements %}
+                                <tr class="hover-row">
+                                    <td class="font-bold text-sm">{{ movement.producto.nombre if movement.producto else '-' }}</td>
+                                    <td>
+                                        <span class="
+                                            {% if movement.tipo == 'compra' %}text-success
+                                            {% elif movement.tipo == 'venta' %}text-warning
+                                            {% else %}text-primary{% endif %}
+                                            font-bold capitalize
+                                        ">
+                                            {{ movement.tipo }}
+                                        </span>
+                                    </td>
+                                    <td class="font-medium">{{ movement.cantidad_unidades }}</td>
+                                    <td>{{ movement.usuario.nombre_completo if movement.usuario else '-' }}</td>
+                                    <td class="text-xs text-muted">{{ movement.created_at|datetime_short }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state p-8 text-center">
+                    <div class="empty-icon bg-gray-light text-muted mx-auto mb-3">
+                        <i class="fa-solid fa-inbox text-2xl"></i>
+                    </div>
+                    <p class="text-sm font-medium text-muted">Todavía no hay movimientos de inventario.</p>
+                </div>
+            {% endif %}
+        </div>
+    </article>
+
+</div>
+{% endblock %}

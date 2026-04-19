@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="filament-dashboard p-4 md:p-6">
+    <header class="page-header">
+        <div>
+            <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">Configuración</p>
+            <h1 class="text-2xl font-bold text-gray-800">
+                <i class="fa-solid fa-layer-group mr-2 text-muted"></i> Zonas
+            </h1>
+            <p class="text-sm text-muted mt-1">Administra las áreas del local como Barra, Patio o nuevas secciones.</p>
+        </div>
+
+        <div class="page-actions">
+            <a class="button button-primary hover-lift shadow-sm" href="{{ url_for('web.nueva_zona') }}">
+                <i class="fa-solid fa-plus mr-2"></i> Nueva zona
+            </a>
+        </div>
+    </header>
+
+    <article class="panel">
+        <div class="panel-header border-b bg-gray-50">
+            <div>
+                <h2 class="panel-title font-bold">
+                    <i class="fa-solid fa-map-location-dot mr-2 text-muted"></i> Zonas registradas
+                </h2>
+                <p class="text-sm text-muted mt-1">Cada zona agrupa las mesas visibles para la operación.</p>
+            </div>
+        </div>
+
+        <div class="panel-body">
+            {% if zones %}
+                <div class="entity-list">
+                    {% for zone in zones %}
+                        <article class="entity-card">
+                            <div class="entity-main">
+                                <div class="entity-topline">
+                                    <div>
+                                        <strong class="text-sm">{{ zone.nombre }}</strong>
+                                        <span class="text-xs text-muted">{{ zone.mesas|length }} mesa{{ '' if zone.mesas|length == 1 else 's' }}</span>
+                                    </div>
+
+                                    <span class="badge bg-primary-light text-primary">
+                                        {{ zone.mesas|length }} en zona
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="entity-actions">
+                                <a class="button button-secondary button-small" href="{{ url_for('web.editar_zona', zone_id=zone.id) }}">
+                                    <i class="fa-solid fa-pen mr-1"></i> Editar
+                                </a>
+                                <form method="post" action="{{ url_for('web.eliminar_zona', zone_id=zone.id) }}">
+                                    <button class="button button-ghost button-small text-danger border-danger" type="submit" data-confirm-title="Eliminar zona" data-confirm-message="Se intentará eliminar {{ zone.nombre }}. Solo se puede si no tiene mesas asociadas.">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state p-8 text-center">
+                    <div class="empty-icon bg-gray-light text-muted mx-auto mb-3">
+                        <i class="fa-solid fa-layer-group text-2xl"></i>
+                    </div>
+                    <p class="text-sm font-medium text-muted">Todavía no hay zonas registradas.</p>
+                </div>
+            {% endif %}
+        </div>
+    </article>
+</div>
+{% endblock %}

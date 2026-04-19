@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div
+    class="filament-dashboard p-4 md:p-6"
+    data-kitchen-live
+    data-api-url="{{ url_for('api.api_cocina_pending') }}"
+    data-action-template="{{ prepare_url_template }}"
+    data-initial-ids="{{ pending_items|map(attribute='id')|join(',') }}"
+>
+
+    <header class="page-header">
+        <div>
+            <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">Cocina en vivo</p>
+            <h1 class="text-2xl font-bold text-gray-800">
+                <i class="fa-solid fa-fire-burner mr-2 text-muted"></i> Cola de Preparación
+            </h1>
+            <p class="text-sm text-muted mt-1">
+                Esta pantalla se actualiza automáticamente y muestra los items pendientes en tiempo real.
+            </p>
+        </div>
+
+        <div class="page-actions">
+            <button class="button button-primary hover-lift shadow-sm" type="button" data-alert-toggle>
+                <i class="fa-solid fa-bell mr-2"></i> Activar alertas
+            </button>
+            <span class="badge bg-white shadow-sm border border-gray-200 text-muted" data-alert-status>
+                Alertas apagadas
+            </span>
+        </div>
+    </header>
+
+    <section class="filament-stats-grid mb-6">
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-warning-light text-warning">
+                    <i class="fa-solid fa-clock"></i>
+                </div>
+                <h3 class="stat-label text-muted">Pendientes</h3>
+            </div>
+            <div class="stat-value mt-3" data-kitchen-count>{{ pending_items|length }}</div>
+            <p class="stat-desc text-warning mt-1 font-medium text-xs">
+                Items en cola actualmente
+            </p>
+        </article>
+
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-primary-light text-primary">
+                    <i class="fa-solid fa-rotate"></i>
+                </div>
+                <h3 class="stat-label text-muted">Modo</h3>
+            </div>
+            <div class="stat-value mt-3">Automático</div>
+            <p class="stat-desc text-primary mt-1 font-medium text-xs">
+                Actualización en tiempo real
+            </p>
+        </article>
+
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-success-light text-success">
+                    <i class="fa-solid fa-bell"></i>
+                </div>
+                <h3 class="stat-label text-muted">Alertas</h3>
+            </div>
+            <div class="stat-value mt-3" data-kitchen-alert-word>Off</div>
+            <p class="stat-desc text-success mt-1 font-medium text-xs">
+                Sonido y avisos visuales
+            </p>
+        </article>
+
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-gray-light text-muted">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                </div>
+                <h3 class="stat-label text-muted">Última sincronización</h3>
+            </div>
+            <div class="stat-value mt-3 text-lg" data-last-update>Sincronizando...</div>
+            <p class="stat-desc text-muted mt-1 font-medium text-xs">
+                Estado del monitoreo
+            </p>
+        </article>
+    </section>
+
+    <section class="panel kitchen-alert-banner mb-6" data-kitchen-banner hidden></section>
+
+    <article class="panel">
+        <div class="panel-header border-b bg-gray-50">
+            <div>
+                <h2 class="panel-title font-bold">
+                    <i class="fa-solid fa-list-check mr-2 text-muted"></i> Items pendientes
+                </h2>
+                <p class="text-sm text-muted mt-1">
+                    Visualiza los platos en espera y márcalos como listos al terminar.
+                </p>
+            </div>
+            <span class="badge bg-white shadow-sm border border-gray-200 text-muted" data-kitchen-status>
+                {{ pending_items|length }} en cola
+            </span>
+        </div>
+
+        <div class="panel-body">
+            <div class="kitchen-queue" data-kitchen-queue>
+                {% if pending_items %}
+                    {% for item in pending_items %}
+                        <article class="kitchen-card" data-item-id="{{ item.id }}">
+                            <div class="kitchen-card-media">
+                                {% if item.producto and item.producto.imagen_url %}
+                                    <img src="{{ item.producto.imagen_url }}" alt="{{ item.producto.nombre }}" loading="lazy">
+                                {% else %}
+                                    <div class="product-placeholder product-placeholder-large">
+                                        {{ item.producto.nombre[:1] if item.producto else '?' }}
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="kitchen-card-body p-4">
+                                <div class="kitchen-card-top">
+                                    <div>
+                                        <strong class="text-sm">{{ item.producto.nombre if item.producto else '-' }}</strong>
+                                        <span class="text-xs text-muted">
+                                            Orden #{{ item.orden.id if item.orden else '-' }} •
+                                            {{ item.orden.mesa.etiqueta if item.orden and item.orden.mesa else '-' }}
+                                        </span>
+                                    </div>
+                                    <span class="badge badge-pendiente">Pendiente</span>
+                                </div>
+
+                                <div class="kitchen-card-meta">
+                                    <span>Cantidad: {{ item.cantidad }}</span>
+                                    <span>Espera: {{ item.created_at|time_ago }}</span>
+                                </div>
+
+                                {% if item.orden and item.orden.nombre_cliente %}
+                                    <p class="inline-note">Cliente: {{ item.orden.nombre_cliente }}</p>
+                                {% endif %}
+
+                                {% if item.notas %}
+                                    <p class="inline-note">Notas: {{ item.notas }}</p>
+                                {% endif %}
+
+                                <form method="post" action="{{ url_for('web.preparar_item', item_id=item.id) }}" data-confirm-title="Marcar item listo" data-confirm-message="El producto {{ item.producto.nombre if item.producto else 'seleccionado' }} pasará de pendiente a listo.">
+                                    <button class="button button-primary button-full" type="submit">
+                                        <i class="fa-solid fa-check mr-2"></i> Marcar listo
+                                    </button>
+                                </form>
+                            </div>
+                        </article>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state-block" data-kitchen-empty>
+                        <div class="empty-state p-8 text-center">
+                            <div class="empty-icon bg-gray-light text-muted mx-auto mb-3">
+                                <i class="fa-solid fa-utensils text-2xl"></i>
+                            </div>
+                            <p class="text-sm font-medium text-muted">No hay platillos pendientes en este momento.</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </article>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+    <script src="{{ url_for('static', filename='kitchen-live.js') }}"></script>
+{% endblock %}

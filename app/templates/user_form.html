@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="module-shell module-narrow">
+    <section class="module-bar">
+        <div>
+            <p class="eyebrow">Seguridad</p>
+            <h1>{{ 'Editar usuario' if user else 'Nuevo usuario' }}</h1>
+            <p class="muted-copy">Cada persona entra solo al modulo que le toca segun su rol.</p>
+        </div>
+        <div class="action-grid">
+            <a class="button button-ghost" href="{{ url_for('web.usuarios') }}">Volver al listado</a>
+        </div>
+    </section>
+
+    <section class="panel">
+        <form class="form-stack" method="post" action="{{ url_for('web.actualizar_usuario', user_id=user.id) if user else url_for('web.crear_usuario') }}">
+            <label for="nickname">Nickname</label>
+            <input id="nickname" name="nickname" value="{{ user.nickname if user else '' }}" required>
+
+            <div class="form-grid two-up">
+                <div>
+                    <label for="nombre">Nombre</label>
+                    <input id="nombre" name="nombre" value="{{ user.nombre if user else '' }}" required>
+                </div>
+                <div>
+                    <label for="apellido">Apellido</label>
+                    <input id="apellido" name="apellido" value="{{ user.apellido if user else '' }}" required>
+                </div>
+            </div>
+
+            <label for="rol">Rol</label>
+            <select id="rol" name="rol" required>
+                <option value="dueño" {% if user and user.rol == 'dueño' %}selected{% endif %}>Administrador</option>
+                <option value="cajero" {% if user and user.rol == 'cajero' %}selected{% endif %}>Cajero</option>
+                <option value="mesero" {% if user and user.rol == 'mesero' %}selected{% endif %}>Mesero</option>
+                <option value="cocina" {% if user and user.rol == 'cocina' %}selected{% endif %}>Cocina</option>
+            </select>
+
+            <label for="password">{{ 'Nueva contrasena' if user else 'Contrasena inicial' }}</label>
+            <input id="password" name="password" type="password" minlength="6" {% if not user %}required{% endif %}>
+
+            <label class="checkbox-inline">
+                <input type="checkbox" name="activo" {% if not user or user.activo %}checked{% endif %}>
+                <span>Usuario activo</span>
+            </label>
+
+            <button class="button button-primary button-full" type="submit">{{ 'Guardar cambios' if user else 'Crear usuario' }}</button>
+        </form>
+    </section>
+</section>
+{% endblock %}

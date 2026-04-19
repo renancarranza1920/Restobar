@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="module-shell module-narrow">
+    <section class="module-bar">
+        <div>
+            <p class="eyebrow">Inventario</p>
+            <h1>Nuevo movimiento</h1>
+            <p class="muted-copy">Registra compras, ajustes o ventas manuales desde una pantalla dedicada.</p>
+        </div>
+        <div class="action-grid">
+            <a class="button button-ghost" href="{{ url_for('web.inventario') }}">Volver al listado</a>
+        </div>
+    </section>
+
+    <section class="panel">
+        <form class="form-stack" method="post" action="{{ url_for('web.registrar_movimiento_inventario') }}">
+            <label for="product_id">Producto</label>
+            <select id="product_id" name="product_id" required>
+                {% for product in products %}
+                    <option value="{{ product.id }}">{{ product.nombre }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="movement_type">Tipo</label>
+            <select id="movement_type" name="movement_type">
+                <option value="compra">Compra</option>
+                <option value="ajuste">Ajuste</option>
+                <option value="venta">Venta manual</option>
+            </select>
+
+            <div class="form-grid two-up">
+                <div>
+                    <label for="packages">Paquetes</label>
+                    <input id="packages" name="packages" type="number" placeholder="Opcional">
+                </div>
+                <div>
+                    <label for="units">Unidades</label>
+                    <input id="units" name="units" type="number" required>
+                </div>
+            </div>
+
+            <label for="unit_price">Precio unitario</label>
+            <input id="unit_price" name="unit_price" type="number" step="0.01" min="0">
+
+            <label for="notes">Notas</label>
+            <input id="notes" name="notes" placeholder="Opcional">
+
+            <button class="button button-primary button-full" type="submit">Guardar movimiento</button>
+        </form>
+    </section>
+</section>
+{% endblock %}

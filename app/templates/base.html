@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f9fafb">
+    <title>{% if page_title %}{{ page_title }} | {% endif %}{{ app_name | default('Restobar') }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="theme-{{ current_theme | default('light') }} filament-body {{ 'auth-body' if current_user.is_authenticated else 'guest-body' }}">
+    {% if current_user.is_authenticated %}
+        <button class="mobile-nav-toggle shadow-sm" type="button" data-sidebar-open aria-label="Abrir menú">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+
+        <div class="sidebar-backdrop" data-sidebar-backdrop hidden></div>
+
+        <aside class="filament-sidebar shadow-md" data-sidebar>
+            <div class="sidebar-header border-b">
+                <a class="flex items-center gap-3 w-full" href="{{ url_for(nav_items[0].endpoint) if nav_items else '#' }}">
+                    <div class="brand-avatar shadow-sm">R</div>
+                    <div class="brand-info">
+                        <h1 class="brand-title">Restobar</h1>
+                        <span class="brand-subtitle text-xs">{{ role_label(current_user.rol) if role_label else 'Administrador' }}</span>
+                    </div>
+                </a>
+                <button class="sidebar-close" type="button" data-sidebar-close aria-label="Cerrar menú">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="sidebar-date-badge shadow-sm mt-4">
+                {{ now_label | default('17/04/2026') }}
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    {% if nav_items %}
+                        {% for item in nav_items %}
+                            <li>
+                                <a href="{{ url_for(item.endpoint) }}" class="nav-link {{ 'is-active shadow-sm' if request.endpoint in item.active_endpoints else '' }}">
+                                    {{ item.label }}
+                                </a>
+                            </li>
+                        {% endfor %}
+                    {% else %}
+                        <li><a href="#" class="nav-link is-active">Inicio</a></li>
+                        <li><a href="#" class="nav-link">Operación</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="mb-3">
+                    <span class="user-label">Usuario actual</span>
+                    <strong class="user-name">{{ current_user.nombre_completo or current_user.nickname }}</strong>
+                    <div class="text-xs text-muted">{{ current_user.nickname }}</div>
+                </div>
+
+                {% if user_can and user_can(current_user, 'caja') %}
+                    <div class="mb-3 bg-gray-50 p-2 rounded border border-gray-100">
+                        <span class="user-label">Estado de Caja</span>
+                        <strong class="user-name {{ 'text-success' if active_session else 'text-danger' }}">
+                            <i class="fa-solid fa-circle text-xs mr-1"></i> {{ 'Abierta' if active_session else 'Cerrada' }}
+                        </strong>
+                        <div class="text-xs text-muted mt-1">
+                            {% if active_session %}
+                                Desde {{ active_session.fecha_apertura|datetime_short }}
+                            {% else %}
+                                Sin sesión activa
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="sidebar-actions">
+                    <form method="post" action="{{ url_for('web.cambiar_tema') }}" style="flex: 1;">
+                        <input type="hidden" name="theme" value="toggle">
+                        <button class="button button-ghost button-small button-full hover-lift border-gray-200 sidebar-action-button" type="submit" title="Cambiar tema">
+                            <i class="fa-solid {{ 'fa-sun' if current_theme == 'dark' else 'fa-moon' }}"></i>
+                            <span>{{ 'Modo claro' if current_theme == 'dark' else 'Modo oscuro' }}</span>
+                        </button>
+                    </form>
+
+                    <form method="post" action="{{ url_for('web.logout') }}" style="flex: 1;">
+                        <button class="button button-danger button-small button-full hover-lift shadow-sm sidebar-action-button" type="submit" title="Cerrar sesión">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                            <span>Cerrar sesión</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </aside>
+
+        <main class="filament-main">
+    {% else %}
+        <main class="guest-main">
+    {% endif %}
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-container {{ 'guest-flashes' if not current_user.is_authenticated else '' }}">
+                        {% for category, message in messages %}
+                            <div class="flash-message flash-{{ category }} shadow-sm" data-flash>
+                                <div class="flash-icon">
+                                    <i class="fa-solid {{
+                                        'fa-circle-check' if category == 'success'
+                                        else 'fa-circle-info' if category == 'info'
+                                        else 'fa-triangle-exclamation' if category == 'warning'
+                                        else 'fa-circle-exclamation'
+                                    }}"></i>
+                                </div>
+                                <div class="flash-copy">{{ message }}</div>
+                                <button class="flash-close" type="button" data-flash-close aria-label="Cerrar alerta">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <div class="content-wrapper">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+
+    <div class="confirm-modal" data-confirm-modal hidden>
+        <div class="confirm-dialog shadow-lg">
+            <div class="confirm-dialog-header">
+                <div>
+                    <p class="confirm-dialog-kicker">Confirmación</p>
+                    <h3 class="confirm-dialog-title" data-confirm-title>¿Deseas continuar?</h3>
+                </div>
+                <button class="confirm-dialog-close" type="button" data-confirm-cancel aria-label="Cerrar confirmación">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p class="confirm-dialog-message" data-confirm-message></p>
+            <div class="confirm-dialog-actions">
+                <button class="button button-ghost" type="button" data-confirm-cancel>Cancelar</button>
+                <button class="button button-danger" type="button" data-confirm-accept>Aceptar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

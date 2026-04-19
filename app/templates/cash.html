@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="filament-dashboard p-4 md:p-6">
+
+    <header class="flex justify-between items-end mb-6">
+        <div>
+            <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">Caja</p>
+            <h1 class="text-2xl font-bold text-gray-800">
+                <i class="fa-solid fa-cash-register mr-2 text-muted"></i> Control de Caja
+            </h1>
+            <p class="text-sm text-muted mt-1">
+                Administra apertura, movimientos y cierre del turno en una sola vista.
+            </p>
+        </div>
+
+        {% if user_can(current_user, 'reportes') %}
+            <div>
+                <a class="button button-secondary hover-lift shadow-sm" href="{{ url_for('web.reportes') }}">
+                    <i class="fa-solid fa-chart-column mr-2"></i> Ver reportes
+                </a>
+            </div>
+        {% endif %}
+    </header>
+
+    <section class="filament-stats-grid mb-6">
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-primary-light text-primary">
+                    <i class="fa-solid fa-wallet"></i>
+                </div>
+                <h3 class="stat-label text-muted">Sesión</h3>
+            </div>
+            <div class="stat-value mt-3">{{ 'Abierta' if session_open else 'Cerrada' }}</div>
+            <p class="stat-desc text-primary mt-1 font-medium text-xs">
+                Estado actual de caja
+            </p>
+        </article>
+
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-success-light text-success">
+                    <i class="fa-solid fa-sack-dollar"></i>
+                </div>
+                <h3 class="stat-label text-muted">Ventas</h3>
+            </div>
+            <div class="stat-value mt-3">{{ sales_total|money }}</div>
+            <p class="stat-desc text-success mt-1 font-medium text-xs">
+                Total registrado en la sesión
+            </p>
+        </article>
+
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-warning-light text-warning">
+                    <i class="fa-solid fa-money-bill-wave"></i>
+                </div>
+                <h3 class="stat-label text-muted">Efectivo esperado</h3>
+            </div>
+            <div class="stat-value mt-3">{{ expected_cash|money }}</div>
+            <p class="stat-desc text-warning mt-1 font-medium text-xs">
+                Caja esperada con movimientos
+            </p>
+        </article>
+
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-gray-light text-muted">
+                    <i class="fa-solid fa-credit-card"></i>
+                </div>
+                <h3 class="stat-label text-muted">Tarjetas</h3>
+            </div>
+            <div class="stat-value mt-3">{{ card_total|money }}</div>
+            <p class="stat-desc text-muted mt-1 font-medium text-xs">
+                Ingresos no efectivos
+            </p>
+        </article>
+    </section>
+
+    <section class="filament-content-grid">
+
+        <div class="filament-col">
+
+            <article class="panel mb-6">
+                <div class="panel-header border-b bg-gray-50">
+                    <div>
+                        <h2 class="panel-title font-bold">
+                            <i class="fa-solid fa-sliders mr-2 text-muted"></i>
+                            {{ 'Registrar movimiento' if session_open else 'Abrir caja' }}
+                        </h2>
+                        <p class="text-sm text-muted mt-1">
+                            {{ 'Registra ingresos o egresos manuales de la sesión actual.' if session_open else 'Inicia una nueva sesión de caja con monto de apertura.' }}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="panel-body">
+                    {% if session_open %}
+                        <form class="form-stack" method="post" action="{{ url_for('web.registrar_movimiento_caja') }}">
+
+                            <div>
+                                <label for="movement_type" class="block text-sm font-bold text-gray-800 mb-2">Tipo de movimiento</label>
+                                <select id="movement_type" name="movement_type">
+                                    <option value="ingreso">Ingreso</option>
+                                    <option value="egreso">Egreso</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="concept" class="block text-sm font-bold text-gray-800 mb-2">Concepto</label>
+                                <input id="concept" name="concept" required>
+                            </div>
+
+                            <div>
+                                <label for="amount" class="block text-sm font-bold text-gray-800 mb-2">Monto</label>
+                                <input id="amount" name="amount" type="number" step="0.01" min="0.01" required>
+                            </div>
+
+                            <div class="flex justify-end">
+                                <button class="button button-primary shadow-sm hover-lift" type="submit">
+                                    <i class="fa-solid fa-save mr-2"></i> Guardar movimiento
+                                </button>
+                            </div>
+                        </form>
+                    {% else %}
+                        <form class="form-stack" method="post" action="{{ url_for('web.abrir_caja') }}">
+
+                            <div>
+                                <label for="opening_amount" class="block text-sm font-bold text-gray-800 mb-2">Monto inicial</label>
+                                <input id="opening_amount" name="opening_amount" type="number" step="0.01" min="0" value="0" required>
+                            </div>
+
+                            <div class="flex justify-end">
+                                <button class="button button-primary shadow-sm hover-lift" type="submit">
+                                    <i class="fa-solid fa-lock-open mr-2"></i> Abrir caja
+                                </button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </article>
+
+            {% if session_open %}
+                <article class="panel">
+                    <div class="panel-header border-b bg-gray-50">
+                        <div>
+                            <h2 class="panel-title font-bold">
+                                <i class="fa-solid fa-arrow-right-arrow-left mr-2 text-muted"></i> Movimientos de la sesión
+                            </h2>
+                            <p class="text-sm text-muted mt-1">Últimos ingresos y egresos registrados en caja.</p>
+                        </div>
+                    </div>
+
+                    <div class="panel-body p-0">
+                        {% if recent_movements %}
+                            <div class="table-wrap no-border">
+                                <table class="filament-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Concepto</th>
+                                            <th>Fecha</th>
+                                            <th class="text-right">Monto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for movement in recent_movements %}
+                                            <tr class="hover-row">
+                                                <td>
+                                                    <span class="text-sm font-bold {{ 'text-success' if movement.tipo == 'ingreso' else 'text-danger' }}">
+                                                        {{ movement.tipo|capitalize }}
+                                                    </span>
+                                                </td>
+                                                <td class="text-sm font-medium">{{ movement.concepto }}</td>
+                                                <td class="text-xs text-muted">{{ movement.created_at|datetime_short }}</td>
+                                                <td class="text-right font-bold {{ 'text-success' if movement.tipo == 'ingreso' else 'text-danger' }}">
+                                                    {{ movement.monto|money }}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <div class="empty-state p-8 text-center">
+                                <div class="empty-icon bg-gray-light text-muted mx-auto mb-3">
+                                    <i class="fa-solid fa-inbox text-2xl"></i>
+                                </div>
+                                <p class="text-sm font-medium text-muted">Todavía no hay movimientos en esta sesión.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </article>
+            {% endif %}
+
+        </div>
+
+        <div class="filament-col">
+
+            {% if session_open %}
+                <article class="panel mb-6">
+                    <div class="panel-header border-b bg-gray-50">
+                        <h2 class="panel-title font-bold">
+                            <i class="fa-solid fa-circle-info mr-2 text-muted"></i> Resumen de la sesión
+                        </h2>
+                    </div>
+
+                    <div class="panel-body p-0">
+                        <ul class="filament-list">
+                            <li class="list-item">
+                                <div>
+                                    <div class="text-sm font-bold">Apertura</div>
+                                    <div class="text-xs text-muted">{{ session_open.fecha_apertura|datetime_short }}</div>
+                                </div>
+                                <div class="text-sm font-bold">{{ session_open.monto_apertura|money }}</div>
+                            </li>
+
+                            <li class="list-item">
+                                <div>
+                                    <div class="text-sm font-bold">Efectivo esperado</div>
+                                    <div class="text-xs text-muted">Con ventas y movimientos</div>
+                                </div>
+                                <div class="text-sm font-bold text-warning">{{ expected_cash|money }}</div>
+                            </li>
+
+                            <li class="list-item">
+                                <div>
+                                    <div class="text-sm font-bold">Tarjetas</div>
+                                    <div class="text-xs text-muted">Ingresos no efectivos</div>
+                                </div>
+                                <div class="text-sm font-bold text-primary">{{ card_total|money }}</div>
+                            </li>
+
+                            <li class="list-item">
+                                <div>
+                                    <div class="text-sm font-bold">Ventas totales</div>
+                                    <div class="text-xs text-muted">Sesión actual</div>
+                                </div>
+                                <div class="text-sm font-bold text-success">{{ sales_total|money }}</div>
+                            </li>
+                        </ul>
+                    </div>
+                </article>
+
+                <article class="panel mb-6 border-danger">
+                    <div class="panel-header border-b bg-danger-light">
+                        <h2 class="panel-title font-bold text-danger flex items-center gap-2">
+                            <i class="fa-solid fa-lock"></i> Cerrar caja
+                        </h2>
+                    </div>
+
+                    <div class="panel-body">
+                        <form class="form-stack" method="post" action="{{ url_for('web.cerrar_caja') }}" data-confirm-title="Cerrar caja" data-confirm-message="Se cerrará la sesión de caja actual con el monto real contado que ingresaste.">
+                            <div>
+                                <label for="closing_amount" class="block text-sm font-bold text-gray-800 mb-2">Monto real contado</label>
+                                <input id="closing_amount" name="closing_amount" type="number" step="0.01" min="0" required>
+                                <p class="text-xs text-muted mt-1">Ingresa el monto físico contado al finalizar el turno.</p>
+                            </div>
+
+                            <div class="flex justify-end">
+                                <button class="button button-danger shadow-sm hover-lift" type="submit">
+                                    <i class="fa-solid fa-lock mr-2"></i> Cerrar caja
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </article>
+            {% endif %}
+
+            <article class="panel">
+                <div class="panel-header border-b bg-gray-50">
+                    <div>
+                        <h2 class="panel-title font-bold">
+                            <i class="fa-solid fa-clock-rotate-left mr-2 text-muted"></i> Sesiones cerradas
+                        </h2>
+                        <p class="text-sm text-muted mt-1">Historial reciente de cierres de caja registrados.</p>
+                    </div>
+                </div>
+
+                <div class="panel-body p-0">
+                    {% if closed_sessions %}
+                        <ul class="filament-list">
+                            {% for closed in closed_sessions %}
+                                <li class="list-item hover-row">
+                                    <div>
+                                        <div class="text-sm font-bold">Caja #{{ closed.id }}</div>
+                                        <div class="text-xs text-muted">
+                                            {{ closed.usuario.nombre_completo if closed.usuario else '-' }}
+                                        </div>
+                                    </div>
+                                    <div class="text-sm font-bold">{{ closed.monto_cierre_real|money }}</div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="empty-state p-8 text-center">
+                            <div class="empty-icon bg-gray-light text-muted mx-auto mb-3">
+                                <i class="fa-solid fa-cash-register text-2xl"></i>
+                            </div>
+                            <p class="text-sm font-medium text-muted">Todavía no hay sesiones cerradas.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+
+        </div>
+
+    </section>
+
+</div>
+{% endblock %}

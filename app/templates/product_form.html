@@ -1,0 +1,281 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="filament-dashboard p-4 md:p-6">
+
+    <header class="flex justify-between items-end mb-6">
+        <div>
+            <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">Catálogo</p>
+            <h1 class="text-2xl font-bold text-gray-800">
+                <i class="fa-solid fa-cube mr-2 text-muted"></i>
+                {{ 'Editar producto' if product else 'Nuevo producto' }}
+            </h1>
+            <p class="text-sm text-muted mt-1">Completa la información comercial, inventario, imagen y visibilidad.</p>
+        </div>
+
+        <div>
+            <a class="button button-ghost hover-lift bg-white shadow-sm border-gray-200" href="{{ url_for('web.productos') }}">
+                <i class="fa-solid fa-arrow-left mr-2"></i> Volver
+            </a>
+        </div>
+    </header>
+
+    <form
+        method="post"
+        action="{{ url_for('web.actualizar_producto', product_id=product.id) if product else url_for('web.crear_producto') }}"
+        enctype="multipart/form-data"
+    >
+        <section class="filament-content-grid">
+
+            <div class="filament-col">
+
+                <article class="panel mb-6">
+                    <div class="panel-header border-b bg-gray-50">
+                        <h2 class="panel-title font-bold">
+                            <i class="fa-solid fa-cube mr-2 text-muted"></i> Datos básicos
+                        </h2>
+                    </div>
+
+                    <div class="panel-body">
+                        <div class="mb-5">
+                            <label for="name" class="block text-sm font-bold text-gray-800 mb-2">
+                                Nombre del producto <span class="text-danger">*</span>
+                            </label>
+                            <input
+                                id="name"
+                                name="name"
+                                value="{{ product.nombre if product else '' }}"
+                                required
+                            >
+                        </div>
+
+                        <div class="mb-5">
+                            <label for="category_id" class="block text-sm font-bold text-gray-800 mb-2">
+                                Categoría <span class="text-danger">*</span>
+                            </label>
+                            <select id="category_id" name="category_id" required>
+                                <option value="" disabled {% if not product %}selected{% endif %}>Selecciona una categoría...</option>
+                                {% for category in categories %}
+                                    <option value="{{ category.id }}" {% if product and category.id == product.categoria_id %}selected{% endif %}>
+                                        {{ category.nombre }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="image_url" class="block text-sm font-bold text-gray-800 mb-2">URL externa de imagen</label>
+                            <input
+                                id="image_url"
+                                name="image_url"
+                                value="{{ product.imagen_url if product else '' }}"
+                                placeholder="https://..."
+                            >
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-header border-b bg-gray-50">
+                        <h2 class="panel-title font-bold">
+                            <i class="fa-solid fa-tags mr-2 text-muted"></i> Precios e inventario
+                        </h2>
+                    </div>
+
+                    <div class="panel-body">
+                        <div class="form-grid two-up mb-5">
+                            <div>
+                                <label for="cost_price" class="block text-sm font-bold text-gray-800 mb-2">Precio de costo</label>
+                                <input
+                                    id="cost_price"
+                                    name="cost_price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value="{{ product.precio_costo if product else 0 }}"
+                                >
+                            </div>
+
+                            <div>
+                                <label for="sale_price" class="block text-sm font-bold text-gray-800 mb-2">
+                                    Precio de venta <span class="text-danger">*</span>
+                                </label>
+                                <input
+                                    id="sale_price"
+                                    name="sale_price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    value="{{ product.precio_venta if product else '' }}"
+                                    required
+                                >
+                            </div>
+                        </div>
+
+                        <div class="form-grid two-up mb-5">
+                            <div>
+                                <label for="purchase_unit" class="block text-sm font-bold text-gray-800 mb-2">Unidad de compra</label>
+                                <input
+                                    id="purchase_unit"
+                                    name="purchase_unit"
+                                    value="{{ product.unidad_compra if product else 'unidad' }}"
+                                    placeholder="Ej: Kg, Litro, Unidad"
+                                >
+                            </div>
+
+                            <div>
+                                <label for="units_per_package" class="block text-sm font-bold text-gray-800 mb-2">Unidades por paquete</label>
+                                <input
+                                    id="units_per_package"
+                                    name="units_per_package"
+                                    type="number"
+                                    min="1"
+                                    value="{{ product.unidades_por_paquete if product else 1 }}"
+                                >
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="current_stock" class="block text-sm font-bold text-gray-800 mb-2">
+                                {{ 'Stock actual' if product else 'Stock inicial' }}
+                            </label>
+                            <input
+                                id="current_stock"
+                                name="current_stock"
+                                type="number"
+                                value="{{ product.stock_actual if product else 0 }}"
+                            >
+                            <p class="text-xs text-muted mt-1">
+                                Se usa como base para el control de inventario del producto.
+                            </p>
+                        </div>
+                    </div>
+                </article>
+
+            </div>
+
+            <div class="filament-col">
+
+                <article class="panel mb-6">
+                    <div class="panel-header border-b bg-gray-50">
+                        <h2 class="panel-title font-bold">
+                            <i class="fa-solid fa-image mr-2 text-muted"></i> Imagen del producto
+                        </h2>
+                    </div>
+
+                    <div class="panel-body">
+                        {% if product and product.imagen_url %}
+                            <div class="empty-state mb-5" style="padding: 1rem;">
+                                <img
+                                    src="{{ product.imagen_url }}"
+                                    alt="{{ product.nombre }}"
+                                    style="max-height: 180px; width: auto; margin: 0 auto; object-fit: contain;"
+                                >
+                            </div>
+
+                            <label class="flex items-start gap-3 mb-5 cursor-pointer">
+                                <input type="checkbox" name="remove_image" style="width:auto; margin-top: 0.2rem;">
+                                <div>
+                                    <span class="block text-sm font-bold text-danger">Quitar imagen actual</span>
+                                    <span class="block text-xs text-muted mt-1">Se eliminará al guardar los cambios.</span>
+                                </div>
+                            </label>
+                        {% else %}
+                            <div class="empty-state mb-5">
+                                <i class="fa-regular fa-image"></i>
+                                <p class="text-sm font-medium text-muted">Este producto aún no tiene imagen.</p>
+                            </div>
+                        {% endif %}
+
+                        <div>
+                            <label for="image_file" class="block text-sm font-bold text-gray-800 mb-2">Subir nueva imagen</label>
+                            <input id="image_file" type="file" name="image_file" accept="image/*">
+                            <p class="text-xs text-muted mt-1">Puedes subir un archivo o usar una URL externa.</p>
+                        </div>
+                    </div>
+                </article>
+
+                <article class="panel">
+                    <div class="panel-header border-b bg-gray-50">
+                        <h2 class="panel-title font-bold">
+                            <i class="fa-solid fa-sliders mr-2 text-muted"></i> Ajustes
+                        </h2>
+                    </div>
+
+                    <div class="panel-body">
+                        <div class="form-stack">
+
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="available"
+                                    style="width:auto; margin-top: 0.2rem;"
+                                    {% if not product or product.disponible %}checked{% endif %}
+                                >
+                                <div>
+                                    <span class="block text-sm font-bold text-gray-800">Disponible para venta</span>
+                                    <span class="block text-xs text-muted mt-1">Si se desmarca, el producto se oculta del catálogo.</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="manages_stock"
+                                    style="width:auto; margin-top: 0.2rem;"
+                                    {% if not product or product.maneja_stock %}checked{% endif %}
+                                >
+                                <div>
+                                    <span class="block text-sm font-bold text-gray-800">Control de stock</span>
+                                    <span class="block text-xs text-muted mt-1">Descuenta unidades automáticamente al vender.</span>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="requires_kitchen"
+                                    style="width:auto; margin-top: 0.2rem;"
+                                    {% if product and product.requiere_cocina %}checked{% endif %}
+                                >
+                                <div>
+                                    <span class="block text-sm font-bold text-gray-800">Requiere cocina</span>
+                                    <span class="block text-xs text-muted mt-1">Úsalo si el producto debe entrar al flujo de cocina.</span>
+                                </div>
+                            </label>
+
+                        </div>
+                    </div>
+                </article>
+
+            </div>
+
+        </section>
+
+        <div class="form-footer">
+            {% if product %}
+                <button class="button button-ghost text-danger border-danger" type="submit" form="delete-product-form" data-confirm-title="Eliminar producto" data-confirm-message="Se intentará eliminar {{ product.nombre }}. Solo se puede si todavía no tiene ventas ni movimientos de inventario.">
+                    <i class="fa-solid fa-trash mr-2"></i> Eliminar
+                </button>
+            {% else %}
+                <span></span>
+            {% endif %}
+
+            <div class="form-footer-actions">
+                <a href="{{ url_for('web.productos') }}" class="button button-ghost bg-white border-gray-200 shadow-sm">
+                    Cancelar
+                </a>
+                <button class="button button-primary shadow-sm hover-lift" type="submit">
+                    <i class="fa-solid fa-save mr-2"></i>
+                    {{ 'Guardar cambios' if product else 'Crear producto' }}
+                </button>
+            </div>
+        </div>
+    </form>
+
+    {% if product %}
+        <form id="delete-product-form" method="post" action="{{ url_for('web.eliminar_producto', product_id=product.id) }}"></form>
+    {% endif %}
+
+</div>
+{% endblock %}

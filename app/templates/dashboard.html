@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="filament-dashboard p-4 md:p-6">
+
+    <section class="welcome-section mb-6">
+        <article class="welcome-card panel">
+            <div class="welcome-content">
+                <div class="avatar-circle shadow-sm">
+                    {{ current_user.nickname[:1]|upper if current_user.nickname else 'R' }}
+                </div>
+                <div>
+                    <h2 class="welcome-title text-lg font-bold">Bienvenida/o, {{ current_user.nickname or 'Usuario' }}</h2>
+                    <p class="welcome-subtitle text-muted text-sm">Resumen operativo de hoy</p>
+                </div>
+            </div>
+            <a href="{{ url_for('web.logout') }}" class="button button-ghost button-small text-danger logout-btn hover-lift">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> Salir
+            </a>
+        </article>
+    </section>
+
+    <section class="filament-stats-grid mb-6">
+        
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-success-light text-success">
+                    <i class="fa-solid fa-receipt"></i>
+                </div>
+                <h3 class="stat-label text-muted">Órdenes de Hoy</h3>
+            </div>
+            <div class="stat-value mt-3">{{ metrics.ordenes_pagadas_hoy + metrics.ordenes_abiertas }}</div>
+            <p class="stat-desc text-success mt-1 font-medium text-xs">
+                <i class="fa-solid fa-arrow-trend-up"></i> Total registradas hoy
+            </p>
+        </article>
+
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-warning-light text-warning">
+                    <i class="fa-solid fa-fire-burner"></i>
+                </div>
+                <h3 class="stat-label text-muted">Pendientes</h3>
+            </div>
+            <div class="stat-value mt-3">{{ metrics.pendientes_cocina + metrics.listos_entrega }}</div>
+            <p class="stat-desc text-warning mt-1 font-medium text-xs">
+                <i class="fa-solid fa-clock"></i> Cocina / Servicio
+            </p>
+        </article>
+
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-primary-light text-primary">
+                    <i class="fa-solid fa-sack-dollar"></i>
+                </div>
+                <h3 class="stat-label text-muted">Ingresos de Hoy</h3>
+            </div>
+            <div class="stat-value mt-3">{{ metrics.ventas_hoy|money }}</div>
+            <p class="stat-desc text-primary mt-1 font-medium text-xs">
+                <i class="fa-solid fa-chart-line"></i> Totales cobrados
+            </p>
+        </article>
+
+        <article class="stat-card panel hover-lift">
+            <div class="stat-header">
+                <div class="stat-icon bg-gray-light text-muted">
+                    <i class="fa-solid fa-chair"></i>
+                </div>
+                <h3 class="stat-label text-muted">Ocupación</h3>
+            </div>
+            <div class="stat-value mt-3">{{ metrics.mesas_ocupadas }} / {{ metrics.mesas_total }}</div>
+            <p class="stat-desc text-muted mt-1 font-medium text-xs">
+                Mesas en uso actualmente
+            </p>
+        </article>
+
+    </section>
+
+    <section class="filament-content-grid">
+        
+        <div class="filament-col">
+            <article class="panel mb-6">
+                <div class="panel-header border-b bg-gray-50">
+                    <h3 class="panel-title font-bold"><i class="fa-solid fa-list-check mr-2"></i> Operación Reciente</h3>
+                    <a class="text-primary text-sm font-medium hover-underline" href="{{ url_for('web.ordenes') }}">Ver todas</a>
+                </div>
+                <div class="panel-body p-0">
+                    {% if recent_orders %}
+                        <div class="table-wrap no-border">
+                            <table class="filament-table">
+                                <thead>
+                                    <tr>
+                                        <th>Orden</th>
+                                        <th>Mesa/Cliente</th>
+                                        <th>Estado</th>
+                                        <th class="text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for order in recent_orders %}
+                                        <tr class="hover-row">
+                                            <td class="font-bold text-sm">#{{ order.id }}</td>
+                                            <td>
+                                                <div class="text-sm font-medium">{{ order.mesa.etiqueta if order.mesa else 'Para llevar' }}</div>
+                                                <div class="text-xs text-muted">{{ order.nombre_cliente or 'Sin nombre' }}</div>
+                                            </td>
+                                            <td>
+                                                <span class="badge badge-{{ order.estado|lower }} shadow-sm">{{ order.estado }}</span>
+                                            </td>
+                                            <td class="text-right font-bold">{{ order.total|money }}</td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="empty-state p-8 text-center">
+                            <div class="empty-icon bg-gray-light text-muted mx-auto mb-3">
+                                <i class="fa-solid fa-inbox text-2xl"></i>
+                            </div>
+                            <p class="text-sm font-medium text-muted">No hay órdenes recientes hoy.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+
+            <article class="panel">
+                <div class="panel-header border-b bg-gray-50">
+                    <h3 class="panel-title font-bold"><i class="fa-solid fa-ranking-star mr-2"></i> Lo más vendido hoy</h3>
+                </div>
+                <div class="panel-body p-0">
+                    {% if metrics.top_products %}
+                        <ul class="filament-list">
+                            {% for row in metrics.top_products %}
+                                <li class="list-item hover-row">
+                                    <div class="flex items-center gap-3">
+                                        <div class="product-avatar shadow-sm font-bold text-primary bg-primary-light">
+                                            {{ row.product.nombre[:1] }}
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-bold">{{ row.product.nombre }}</div>
+                                            <div class="text-xs text-muted">{{ row.quantity }} uds vendidas</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-sm font-bold text-gray-800">{{ row.sales|money }}</div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="empty-state p-8 text-center">
+                            <p class="text-sm text-muted">Aún no hay ventas de productos.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+        </div>
+
+        <div class="filament-col">
+            <article class="panel mb-6">
+                <div class="panel-header border-b bg-gray-50">
+                    <h3 class="panel-title font-bold"><i class="fa-solid fa-cash-register mr-2"></i> Últimos Pagos</h3>
+                </div>
+                <div class="panel-body p-0">
+                    {% if recent_payments %}
+                        <ul class="filament-list">
+                            {% for payment in recent_payments %}
+                                <li class="list-item hover-row">
+                                    <div>
+                                        <div class="text-sm font-bold capitalize">{{ payment.metodo }}</div>
+                                        <div class="text-xs text-muted">Orden #{{ payment.orden_id }} • {{ payment.created_at|datetime_short }}</div>
+                                    </div>
+                                    <div class="text-sm font-bold text-success bg-success-light px-2 py-1 rounded-md">+{{ payment.monto|money }}</div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="empty-state p-6 text-center">
+                            <p class="text-sm text-muted">No se han registrado pagos aún.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+
+            {% if metrics.low_stock_products and user_can(current_user, 'inventario') %}
+                <article class="panel border-danger shadow-danger">
+                    <div class="panel-header border-b bg-danger-light">
+                        <h3 class="panel-title text-danger font-bold flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Stock Crítico
+                        </h3>
+                    </div>
+                    <div class="panel-body p-0">
+                        <ul class="filament-list">
+                            {% for product in metrics.low_stock_products %}
+                                <li class="list-item hover-row bg-red-50">
+                                    <div>
+                                        <div class="text-sm font-bold">{{ product.nombre }}</div>
+                                        <div class="text-xs text-danger">{{ product.categoria.nombre if product.categoria else 'General' }}</div>
+                                    </div>
+                                    <div class="text-sm font-bold text-danger bg-white px-2 py-1 rounded shadow-sm border border-red-100">{{ product.stock_actual }} left</div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </article>
+            {% endif %}
+        </div>
+
+    </section>
+</div>
+{% endblock %}

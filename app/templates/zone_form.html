@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="filament-dashboard p-4 md:p-6 flex justify-center">
+    <div class="w-full max-w-2xl">
+        <header class="page-header">
+            <div>
+                <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">Configuración</p>
+                <h1 class="text-2xl font-bold text-gray-800">{{ 'Editar zona' if zone else 'Nueva zona' }}</h1>
+                <p class="text-sm text-muted mt-1">Usa zonas para ordenar la vista de mesas del restaurante.</p>
+            </div>
+            <div class="page-actions">
+                <a class="button button-ghost hover-lift bg-white shadow-sm border-gray-200" href="{{ url_for('web.zonas') }}">
+                    <i class="fa-solid fa-arrow-left mr-2"></i> Volver
+                </a>
+            </div>
+        </header>
+
+        <article class="panel shadow-md">
+            <div class="panel-header border-b bg-gray-50">
+                <h2 class="panel-title font-bold"><i class="fa-solid fa-pen-ruler mr-2 text-muted"></i> Datos de la zona</h2>
+            </div>
+
+            <div class="panel-body p-6">
+                <form class="form-stack" method="post" action="{{ url_for('web.actualizar_zona', zone_id=zone.id) if zone else url_for('web.crear_zona') }}">
+                    <div class="mb-5">
+                        <label for="nombre" class="block text-sm font-bold text-gray-800 mb-2">Nombre de la zona <span class="text-danger">*</span></label>
+                        <input id="nombre" name="nombre" value="{{ zone.nombre if zone else '' }}" class="w-full rounded-md shadow-sm" maxlength="50" required placeholder="Ej. Barra, Patio, Terraza">
+                    </div>
+
+                    <div class="form-footer">
+                        {% if zone %}
+                            <button class="button button-ghost text-danger border-danger" type="submit" form="delete-zone-form" data-confirm-title="Eliminar zona" data-confirm-message="Se intentará eliminar {{ zone.nombre }}. Solo se puede si no tiene mesas asociadas.">
+                                <i class="fa-solid fa-trash mr-2"></i> Eliminar
+                            </button>
+                        {% else %}
+                            <span></span>
+                        {% endif %}
+
+                        <div class="form-footer-actions">
+                            <a href="{{ url_for('web.zonas') }}" class="button button-ghost">Cancelar</a>
+                            <button class="button button-primary shadow-sm hover-lift" type="submit">
+                                <i class="fa-solid fa-save mr-2"></i> {{ 'Guardar cambios' if zone else 'Crear zona' }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                {% if zone %}
+                    <form id="delete-zone-form" method="post" action="{{ url_for('web.eliminar_zona', zone_id=zone.id) }}"></form>
+                {% endif %}
+            </div>
+        </article>
+    </div>
+</div>
+{% endblock %}

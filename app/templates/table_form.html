@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="filament-dashboard p-4 md:p-6 flex justify-center">
+    <div class="w-full max-w-2xl">
+        <header class="page-header">
+            <div>
+                <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">Configuración</p>
+                <h1 class="text-2xl font-bold text-gray-800">{{ 'Editar mesa' if mesa else 'Nueva mesa' }}</h1>
+                <p class="text-sm text-muted mt-1">Define zona, alias y estado de limpieza inicial.</p>
+            </div>
+            <div class="page-actions">
+                <a class="button button-ghost hover-lift bg-white shadow-sm border-gray-200" href="{{ url_for('web.mesas') }}">
+                    <i class="fa-solid fa-arrow-left mr-2"></i> Volver
+                </a>
+            </div>
+        </header>
+
+        <article class="panel shadow-md">
+            <div class="panel-header border-b bg-gray-50">
+                <h2 class="panel-title font-bold"><i class="fa-solid fa-sliders mr-2 text-muted"></i> Detalles de la mesa</h2>
+            </div>
+
+            <div class="panel-body p-6">
+                <form class="form-stack" method="post" action="{{ url_for('web.actualizar_mesa', mesa_id=mesa.id) if mesa else url_for('web.crear_mesa') }}">
+                    <div class="mb-5">
+                        <label for="numero" class="block text-sm font-bold text-gray-800 mb-2">Número de mesa <span class="text-danger">*</span></label>
+                        <input id="numero" name="numero" type="number" min="1" value="{{ mesa.numero if mesa else '' }}" class="w-full rounded-md shadow-sm" required>
+                    </div>
+
+                    <div class="mb-5">
+                        <label for="nombre_alias" class="block text-sm font-bold text-gray-800 mb-2">Alias</label>
+                        <input id="nombre_alias" name="nombre_alias" value="{{ mesa.nombre_alias if mesa else '' }}" class="w-full rounded-md shadow-sm" placeholder="Ej. Terraza 1, Ventana, VIP">
+                    </div>
+
+                    <div class="form-grid two-up mb-6">
+                        <div>
+                            <label for="zona_id" class="block text-sm font-bold text-gray-800 mb-2">Zona <span class="text-danger">*</span></label>
+                            <select id="zona_id" name="zona_id" class="w-full rounded-md shadow-sm" required>
+                                {% for zona in zonas %}
+                                    <option value="{{ zona.id }}" {% if mesa and zona.id == mesa.zona_id %}selected{% endif %}>{{ zona.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="limpieza_estado" class="block text-sm font-bold text-gray-800 mb-2">Estado de limpieza</label>
+                            <select id="limpieza_estado" name="limpieza_estado" class="w-full rounded-md shadow-sm">
+                                <option value="limpia" {% if not mesa or mesa.limpieza_estado == 'limpia' %}selected{% endif %}>Limpia</option>
+                                <option value="sucia" {% if mesa and mesa.limpieza_estado == 'sucia' %}selected{% endif %}>Sucia</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-footer">
+                        {% if mesa %}
+                            <button class="button button-ghost text-danger border-danger" type="submit" form="delete-table-form" data-confirm-title="Eliminar mesa" data-confirm-message="Se intentará eliminar {{ mesa.etiqueta }}. Solo se puede si no tiene historial de órdenes.">
+                                <i class="fa-solid fa-trash mr-2"></i> Eliminar
+                            </button>
+                        {% else %}
+                            <span></span>
+                        {% endif %}
+
+                        <div class="form-footer-actions">
+                            <a href="{{ url_for('web.mesas') }}" class="button button-ghost">Cancelar</a>
+                            <button class="button button-primary shadow-sm hover-lift" type="submit">
+                                <i class="fa-solid fa-save mr-2"></i> {{ 'Guardar cambios' if mesa else 'Crear mesa' }}
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                {% if mesa %}
+                    <form id="delete-table-form" method="post" action="{{ url_for('web.eliminar_mesa', mesa_id=mesa.id) }}"></form>
+                {% endif %}
+            </div>
+        </article>
+    </div>
+</div>
+{% endblock %}

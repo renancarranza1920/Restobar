@@ -1,0 +1,38 @@
+{% if order.divisiones %}
+    <div class="division-grid mt-6 border-t border-gray-200 pt-6">
+        {% for division in order.divisiones|sort(attribute='numero_persona') %}
+            <article class="panel border-{{ 'success' if division.pagada else 'gray-200' }} shadow-sm" data-division-id="{{ division.id }}">
+                <div class="p-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                    <div>
+                        <strong class="block text-sm text-gray-800">{{ division.nombre_visible }}</strong>
+                        <span class="text-xs text-muted">{{ division.items|length }} ítems</span>
+                    </div>
+                    <span class="badge {{ 'bg-success-light text-success border-success' if division.pagada else 'bg-warning-light text-warning border-warning' }} border">
+                        {{ 'Pagada' if division.pagada else 'Pendiente' }}
+                    </span>
+                </div>
+                <div class="p-3 bg-white max-h-32 overflow-y-auto">
+                    {% for division_item in division.items %}
+                        <div class="flex justify-between text-xs mb-2 border-b border-dashed border-gray-100 pb-1">
+                            <span class="truncate pr-2 text-muted">{{ division_item.orden_item.producto.nombre if division_item.orden_item else '-' }} x{{ division_item.cantidad }}</span>
+                            <strong class="text-gray-800">{{ division_item.subtotal|money }}</strong>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="p-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center gap-2">
+                    <strong class="text-lg text-primary">{{ division.total|money }}</strong>
+
+                    {% if user_can(current_user, 'caja') and not division.pagada %}
+                        <form class="flex gap-2" method="post" action="{{ url_for('web.pagar_division', division_id=division.id) }}" data-confirm-title="Cobrar división" data-confirm-message="Se registrará el cobro de {{ division.nombre_visible }} por {{ division.total|money }}.">
+                            <select name="method" class="text-xs p-1 rounded border-gray-300 w-20">
+                                <option value="efectivo">Efectivo</option>
+                                <option value="tarjeta">Tarjeta</option>
+                            </select>
+                            <button class="button button-primary button-small px-2 shadow-sm" type="submit" {% if not division.todos_entregados %}disabled{% endif %}>Cobrar</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+{% endif %}

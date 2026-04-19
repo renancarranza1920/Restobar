@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="filament-dashboard p-4 md:p-6">
+    <header class="page-header">
+        <div>
+            <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">Catálogo</p>
+            <h1 class="text-2xl font-bold text-gray-800">
+                <i class="fa-solid fa-box-open mr-2 text-muted"></i> Productos
+            </h1>
+            <p class="text-sm text-muted mt-1">Consulta catálogo, disponibilidad e inventario crítico sin mezclarlo con el formulario.</p>
+        </div>
+
+        <div class="page-actions">
+            <a class="button button-secondary hover-lift shadow-sm" href="{{ url_for('web.exportar_reporte', kind='productos') }}">
+                <i class="fa-solid fa-file-csv mr-2"></i> CSV
+            </a>
+            <a class="button button-primary hover-lift shadow-sm" href="{{ url_for('web.nuevo_producto') }}">
+                <i class="fa-solid fa-plus mr-2"></i> Nuevo producto
+            </a>
+        </div>
+    </header>
+
+    <article class="panel mb-6">
+        <div class="panel-header border-b bg-gray-50">
+            <div>
+                <h2 class="panel-title font-bold">
+                    <i class="fa-solid fa-magnifying-glass mr-2 text-muted"></i> Catálogo actual
+                </h2>
+                <p class="text-sm text-muted mt-1">Busca por nombre o categoría y administra acciones rápidas.</p>
+            </div>
+
+            <form class="search-inline" method="get" action="{{ url_for('web.productos') }}">
+                <input type="search" name="q" value="{{ search or '' }}" placeholder="Buscar producto o categoría">
+                <button class="button button-secondary button-small" type="submit">
+                    <i class="fa-solid fa-search mr-1"></i> Buscar
+                </button>
+            </form>
+        </div>
+
+        <div class="panel-body">
+            {% if products %}
+                <div class="entity-list">
+                    {% for product in products %}
+                        <article class="entity-card entity-card-compact">
+                            <div class="entity-media entity-media-small">
+                                {% if product.imagen_url %}
+                                    <img src="{{ product.imagen_url }}" alt="{{ product.nombre }}" loading="lazy">
+                                {% else %}
+                                    <div class="product-placeholder">{{ product.nombre[:1]|upper }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="entity-main">
+                                <div class="entity-topline">
+                                    <div>
+                                        <strong class="text-sm">{{ product.nombre }}</strong>
+                                        <span class="text-xs text-muted">
+                                            {{ product.categoria.nombre if product.categoria else 'Sin categoría' }}
+                                        </span>
+                                    </div>
+
+                                    <span class="badge {{ 'badge-pagada' if product.disponible else 'badge-cancelada' }}">
+                                        {{ 'Disponible' if product.disponible else 'Oculto' }}
+                                    </span>
+                                </div>
+
+                                <div class="entity-metrics">
+                                    <div>
+                                        <span>Venta</span>
+                                        <strong>{{ product.precio_venta|money }}</strong>
+                                    </div>
+                                    <div>
+                                        <span>Stock</span>
+                                        <strong>{{ product.stock_actual if product.maneja_stock else 'No aplica' }}</strong>
+                                    </div>
+                                    <div>
+                                        <span>Flujo</span>
+                                        <strong>{{ 'Cocina' if product.requiere_cocina else 'Salón' }}</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="entity-actions">
+                                <a class="button button-secondary button-small" href="{{ url_for('web.editar_producto', product_id=product.id) }}">
+                                    <i class="fa-solid fa-pen mr-1"></i> Editar
+                                </a>
+                                <form method="post" action="{{ url_for('web.eliminar_producto', product_id=product.id) }}">
+                                    <button class="button button-ghost button-small text-danger border-danger" type="submit" data-confirm-title="Eliminar producto" data-confirm-message="Se intentará eliminar {{ product.nombre }}. Solo se puede si todavía no tiene ventas ni movimientos de inventario.">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </article>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <i class="fa-solid fa-box-open"></i>
+                    <p class="text-sm font-medium text-muted">No hay productos para este filtro.</p>
+                </div>
+            {% endif %}
+        </div>
+    </article>
+
+    {% if low_stock_products %}
+        <article class="panel border-danger">
+            <div class="panel-header border-b bg-danger-light">
+                <h2 class="panel-title font-bold text-danger flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Stock crítico
+                </h2>
+                <span class="badge bg-white shadow-sm border border-gray-200 text-muted">
+                    {{ low_stock_products|length }} alerta{{ '' if low_stock_products|length == 1 else 's' }}
+                </span>
+            </div>
+
+            <div class="panel-body p-0">
+                <ul class="filament-list">
+                    {% for product in low_stock_products %}
+                        <li class="list-item hover-row bg-red-50">
+                            <div>
+                                <div class="text-sm font-bold">{{ product.nombre }}</div>
+                                <div class="text-xs text-danger">
+                                    {{ product.categoria.nombre if product.categoria else 'Sin categoría' }}
+                                </div>
+                            </div>
+
+                            <div class="text-sm font-bold text-danger bg-white px-2 py-1 rounded shadow-sm border border-red-100">
+                                {{ product.stock_actual }}
+                            </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </article>
+    {% endif %}
+</div>
+{% endblock %}

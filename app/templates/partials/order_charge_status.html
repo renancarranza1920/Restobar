@@ -1,0 +1,6 @@
+<div class="stat-value text-lg mt-2 mb-3">
+    <span class="badge {{ 'bg-success-light text-success' if can_charge else 'bg-danger-light text-danger' }} text-sm py-1 px-3">
+        {{ 'Disponible' if can_charge else 'Bloqueado' }}
+    </span>
+</div>
+<p class="stat-desc text-muted">{{ charge_message or 'Orden lista para cobrar.' }}</p>

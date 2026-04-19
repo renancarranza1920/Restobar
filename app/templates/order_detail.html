@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set owner_user = current_user.rol == 'dueño' %}
+{% set has_delivered_items = order.items_entregados|length > 0 %}
+
+<div class="filament-dashboard p-4 md:p-6" data-order-live data-refresh-url="{{ url_for('api.api_orden_estado', order_id=order.id, personas=split_people_count) }}">
+    <header class="page-header">
+        <div>
+            <div class="flex items-center gap-3 mb-1">
+                <a href="{{ url_for('web.ordenes') }}" class="text-muted hover:text-primary"><i class="fa-solid fa-arrow-left"></i></a>
+                <p class="text-xs font-bold text-primary uppercase tracking-wide">Orden #{{ order.id }}</p>
+                <span class="badge badge-{{ order.estado|lower }} shadow-sm">{{ order.estado }}</span>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-800">{{ order.mesa.etiqueta if order.mesa else 'Mesa sin nombre' }}</h1>
+            <p class="text-sm text-muted mt-2">
+                <i class="fa-regular fa-user mr-1"></i> {{ order.nombre_cliente or 'Sin referencia' }} |
+                <i class="fa-regular fa-clock mr-1"></i> {{ order.created_at|datetime_short }} por {{ order.usuario.nombre_completo if order.usuario else 'Sistema' }}
+            </p>
+        </div>
+
+        <div class="page-actions">
+            <a class="button button-ghost bg-white border-gray-200 shadow-sm hover-lift" href="{{ url_for('web.ticket_orden', order_id=order.id) }}" target="_blank">
+                <i class="fa-solid fa-receipt mr-1"></i> Ticket venta
+            </a>
+            <a class="button button-ghost bg-white border-gray-200 shadow-sm hover-lift" href="{{ url_for('web.ticket_cocina', order_id=order.id) }}" target="_blank">
+                <i class="fa-solid fa-fire-burner mr-1"></i> Ticket cocina
+            </a>
+
+            {% if user_can(current_user, 'caja') and order.total_pagado == 0 and order.estado == 'abierta' and (owner_user or not has_delivered_items) %}
+                <form method="post" action="{{ url_for('web.cancelar_orden', order_id=order.id) }}" data-confirm-title="Cancelar orden" data-confirm-message="Se cancelará la orden completa #{{ order.id }}. Esta acción no se puede deshacer fácilmente.">
+                    <button class="button button-danger shadow-sm hover-lift" type="submit">
+                        <i class="fa-solid fa-ban mr-1"></i> Cancelar orden
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+    </header>
+
+    {% if user_can(current_user, 'caja') and has_delivered_items and not owner_user and order.total_pagado == 0 and order.estado == 'abierta' %}
+        <div class="inline-alert inline-alert-warning mb-6">
+            <i class="fa-solid fa-triangle-exclamation mr-2"></i> Solo administración puede cancelar una orden que ya tiene productos entregados.
+        </div>
+    {% endif %}
+
+    <section class="filament-stats-grid mb-6">
+        <article class="stat-card panel hover-lift">
+            <h3 class="stat-label text-muted">Total de orden</h3>
+            <div class="stat-value">{{ order.total|money }}</div>
+            <p class="stat-desc text-muted"><i class="fa-solid fa-calculator"></i> {{ order.items_activos|length }} ítems activos</p>
+        </article>
+        <article class="stat-card panel hover-lift">
+            <h3 class="stat-label text-muted">Pagado</h3>
+            <div class="stat-value text-success">{{ order.total_pagado|money }}</div>
+            <p class="stat-desc text-success"><i class="fa-solid fa-check"></i> {{ order.pagos|length }} pagos registrados</p>
+        </article>
+        <article class="stat-card panel hover-lift border-primary">
+            <h3 class="stat-label text-primary font-bold">Saldo pendiente</h3>
+            <div class="stat-value text-primary">{{ order.saldo_pendiente|money }}</div>
+            <p class="stat-desc text-primary">{{ 'Cuenta dividida' if order.divisiones else 'Cobro normal' }}</p>
+        </article>
+        <article class="stat-card panel hover-lift" data-order-charge-status>
+            <h3 class="stat-label text-muted">Estado de cobro</h3>
+            {% include "partials/order_charge_status.html" %}
+        </article>
+    </section>
+
+    <section class="filament-content-grid">
+        <div class="filament-col">
+            <article class="panel mb-6">
+                <div class="panel-header border-b bg-gray-50 flex justify-between items-center">
+                    <h2 class="panel-title font-bold"><i class="fa-solid fa-utensils mr-2"></i> Ítems de la orden</h2>
+                    <span class="badge bg-white shadow-sm border border-gray-200 text-muted" data-order-delivered-count>{{ order.items_entregados|length }} entregados</span>
+                </div>
+
+                <div class="panel-body p-0" data-order-items-panel>
+                    {% include "partials/order_items_list.html" %}
+                </div>
+            </article>
+
+            <article class="panel mb-6">
+                <div class="panel-header border-b bg-gray-50 flex justify-between items-center">
+                    <h2 class="panel-title font-bold"><i class="fa-solid fa-users-viewfinder mr-2"></i> Dividir cuenta</h2>
+                    {% if order.divisiones %}
+                        <form method="post" action="{{ url_for('web.quitar_division', order_id=order.id) }}" data-confirm-title="Quitar división" data-confirm-message="La orden volverá a cobro normal y se eliminará el reparto guardado.">
+                            <button class="button button-ghost button-small text-danger" type="submit" {% if division_locked %}disabled{% endif %}>Quitar división</button>
+                        </form>
+                    {% endif %}
+                </div>
+
+                <div class="panel-body p-4 sm:p-6">
+                    {% if order.items_activos %}
+                        {% if division_locked %}
+                            <div class="inline-alert inline-alert-info mb-4">
+                                <i class="fa-solid fa-lock mr-2"></i> La división ya comenzó a cobrarse, el reparto no puede editarse.
+                            </div>
+                        {% endif %}
+
+                        <form method="post" action="{{ url_for('web.dividir_orden', order_id=order.id) }}" data-split-form data-confirm-title="Guardar reparto" data-confirm-message="Se guardará la división actual de la cuenta por persona.">
+                            <div class="split-config-card bg-gray-50 p-4 rounded-md border border-gray-200 mb-6">
+                                <div class="split-config-top">
+                                    <div class="mb-4 max-w-xs">
+                                        <label for="people_count" class="block text-sm font-bold text-gray-800 mb-2">Cantidad de personas</label>
+                                        <select id="people_count" name="people_count" class="w-full rounded shadow-sm border-gray-300 p-2" data-split-selector data-order-url="{{ url_for('web.detalle_orden', order_id=order.id) }}" {% if division_locked %}disabled{% endif %}>
+                                            {% for count in range(2, 11) %}
+                                                <option value="{{ count }}" {% if split_people_count == count %}selected{% endif %}>{{ count }} personas</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
+                                    <div class="inline-alert inline-alert-info inline-alert-compact split-help">
+                                        <i class="fa-solid fa-circle-info"></i>
+                                        <span>Asigna exactamente todas las unidades entre las personas. El cambio de cantidad recarga la matriz automáticamente.</span>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    {% for person in range(1, split_people_count + 1) %}
+                                        <div>
+                                            <label class="block text-xs font-bold text-gray-600 mb-1">P{{ person }}</label>
+                                            <input name="label_{{ person }}" value="{{ split_labels.get(person, '') }}" class="w-full rounded border-gray-300 p-1.5 text-sm" placeholder="Nombre..." {% if division_locked %}readonly{% endif %}>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div class="table-wrap no-border shadow-sm mb-6 overflow-x-auto split-table-wrap">
+                                <table class="filament-table text-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Producto</th>
+                                            <th class="text-center">Total</th>
+                                            {% for person in range(1, split_people_count + 1) %}
+                                                <th class="text-center font-bold text-primary">P{{ person }}</th>
+                                            {% endfor %}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in split_matrix %}
+                                            <tr data-split-row data-item-name="{{ row.item.producto.nombre if row.item.producto else 'Producto' }}" data-item-quantity="{{ row.item.cantidad }}">
+                                                <td>
+                                                    <div class="font-medium text-gray-800">{{ row.item.producto.nombre if row.item.producto else '-' }}</div>
+                                                    <div class="split-product-meta">
+                                                        {{ row.item.precio_unitario|money }} c/u · {{ row.item.subtotal|money }} total
+                                                    </div>
+                                                </td>
+                                                <td class="text-center font-bold">{{ row.item.cantidad }}</td>
+                                                {% for person in range(1, split_people_count + 1) %}
+                                                    <td class="text-center">
+                                                        <input
+                                                            class="split-qty-input"
+                                                            type="number"
+                                                            min="0"
+                                                            max="{{ row.item.cantidad }}"
+                                                            name="item_{{ row.item.id }}_person_{{ person }}"
+                                                            value="{{ row.assignments.get(person, 0) }}"
+                                                            data-split-input
+                                                            {% if division_locked %}readonly{% endif %}
+                                                        >
+                                                    </td>
+                                                {% endfor %}
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {% if user_can(current_user, 'caja') %}
+                                <button class="button button-secondary button-full shadow-sm hover-lift" type="submit" {% if division_locked or order.estado != 'abierta' %}disabled{% endif %}>
+                                    <i class="fa-solid fa-arrows-split-up-and-left mr-2"></i> Guardar reparto
+                                </button>
+                            {% endif %}
+                        </form>
+
+                        <div data-order-division-cards>
+                            {% include "partials/order_division_cards.html" %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state py-4 text-center">
+                            <p class="text-sm text-muted">Agrega productos antes de dividir la cuenta.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+        </div>
+
+        <div class="filament-col">
+            <article class="panel mb-6 shadow-md border-primary border-t-4">
+                <div class="panel-header border-b bg-white">
+                    <h2 class="panel-title font-bold text-primary"><i class="fa-solid fa-plus-circle mr-2"></i> Agregar ítem</h2>
+                </div>
+                <div class="panel-body p-5">
+                    <form class="form-stack" method="post" action="{{ url_for('web.agregar_item_orden', order_id=order.id) }}">
+                        <div class="mb-4">
+                            <label for="product_id" class="block text-sm font-bold text-gray-800 mb-2">Producto</label>
+                            <select id="product_id" name="product_id" class="w-full rounded shadow-sm border-gray-300 p-2 text-sm" required>
+                                {% for product in products %}
+                                    <option value="{{ product.id }}">{{ product.nombre }} | {{ product.precio_venta|money }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="quantity" class="block text-sm font-bold text-gray-800 mb-2">Cantidad</label>
+                            <input id="quantity" name="quantity" type="number" min="1" value="1" class="w-full rounded shadow-sm border-gray-300 p-2" required>
+                        </div>
+
+                        <div class="mb-5">
+                            <label for="notes" class="block text-sm font-bold text-gray-800 mb-2">Notas cocina</label>
+                            <input id="notes" name="notes" class="w-full rounded shadow-sm border-gray-300 p-2 text-sm" placeholder="Ej: Sin cebolla, término medio...">
+                        </div>
+
+                        <button class="button button-primary button-full hover-lift shadow-sm" type="submit" {% if order.estado != 'abierta' %}disabled{% endif %}>
+                            <i class="fa-solid fa-cart-plus mr-2"></i> Agregar a la orden
+                        </button>
+                    </form>
+                </div>
+            </article>
+
+            <article class="panel mb-6">
+                <div class="panel-header border-b bg-gray-50">
+                    <h2 class="panel-title font-bold"><i class="fa-solid fa-cash-register mr-2 text-success"></i> Pago de la mesa</h2>
+                </div>
+                <div class="panel-body p-5" data-order-payment-panel>
+                    {% include "partials/order_payment_panel.html" %}
+                </div>
+            </article>
+
+            <article class="panel">
+                <div class="panel-header border-b bg-gray-50">
+                    <h2 class="panel-title font-bold text-sm"><i class="fa-solid fa-clock-rotate-left mr-2 text-muted"></i> Historial de pagos</h2>
+                </div>
+                <div class="panel-body p-0">
+                    {% if order.pagos %}
+                        <ul class="filament-list">
+                            {% for payment in order.pagos %}
+                                <li class="list-item bg-white hover-row">
+                                    <div>
+                                        <div class="text-sm font-bold capitalize text-gray-800">{{ payment.metodo }}</div>
+                                        <div class="text-xs text-muted">{{ payment.created_at|datetime_short }}</div>
+                                    </div>
+                                    <div class="text-sm font-bold text-success bg-success-light px-2 py-1 rounded">+{{ payment.monto|money }}</div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="empty-state p-6 text-center">
+                            <p class="text-sm text-muted">Sin pagos registrados.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </article>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script src="{{ url_for('static', filename='order-live.js') }}"></script>
+{% endblock %}

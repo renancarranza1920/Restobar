@@ -1,0 +1,159 @@
+body.ticket-body {
+    margin: 0;
+    background: #efe8de;
+    color: #231d18;
+    font-family: "Segoe UI", Tahoma, sans-serif;
+}
+
+.ticket-sheet {
+    width: min(760px, calc(100% - 2rem));
+    margin: 1.25rem auto;
+    padding: 1.5rem;
+    background: #fffdfa;
+    border-radius: 24px;
+    box-shadow: 0 20px 48px rgba(84, 68, 54, 0.14);
+}
+
+.ticket-sheet-kitchen {
+    max-width: 680px;
+}
+
+.ticket-header,
+.ticket-meta,
+.ticket-totals,
+.ticket-list-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.ticket-header {
+    align-items: start;
+    margin-bottom: 1.25rem;
+}
+
+.ticket-header h1 {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 2.1rem;
+}
+
+.ticket-eyebrow,
+.ticket-meta span,
+.ticket-footer,
+.ticket-header p {
+    color: #736456;
+}
+
+.ticket-eyebrow {
+    margin: 0 0 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.8rem;
+}
+
+.ticket-actions {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.ticket-button {
+    min-height: 42px;
+    padding: 0.7rem 1rem;
+    border-radius: 999px;
+    border: none;
+    background: #40342b;
+    color: #fff9f2;
+    cursor: pointer;
+}
+
+.ticket-button-secondary {
+    background: #eae1d6;
+    color: #40342b;
+}
+
+.ticket-meta,
+.ticket-totals,
+.ticket-section {
+    margin-top: 1.1rem;
+}
+
+.ticket-meta {
+    flex-wrap: wrap;
+}
+
+.ticket-meta div,
+.ticket-totals div {
+    flex: 1 1 140px;
+    padding: 0.85rem 1rem;
+    background: #f5eee5;
+    border-radius: 18px;
+}
+
+.ticket-meta span,
+.ticket-totals span {
+    display: block;
+    font-size: 0.82rem;
+    margin-bottom: 0.25rem;
+}
+
+.ticket-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1.2rem;
+}
+
+.ticket-table th,
+.ticket-table td {
+    padding: 0.8rem 0.35rem;
+    border-bottom: 1px dashed #d5c7b9;
+    text-align: left;
+    vertical-align: top;
+}
+
+.ticket-table th {
+    font-size: 0.8rem;
+    color: #736456;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.ticket-table small {
+    display: block;
+    color: #736456;
+    margin-top: 0.2rem;
+}
+
+.ticket-section h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+}
+
+.ticket-list {
+    display: grid;
+    gap: 0.55rem;
+}
+
+.ticket-footer {
+    margin-top: 1.4rem;
+    text-align: center;
+}
+
+@media print {
+    body.ticket-body {
+        background: #fff;
+    }
+
+    .ticket-sheet {
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+}
