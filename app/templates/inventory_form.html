@@ -14,34 +14,63 @@
     </section>
 
     <section class="panel">
-        <form class="form-stack" method="post" action="{{ url_for('web.registrar_movimiento_inventario') }}">
+        <form class="form-stack" method="post" action="{{ url_for('web.registrar_movimiento_inventario') }}" data-inventory-form>
             <label for="product_id">Producto</label>
-            <select id="product_id" name="product_id" required>
+            <select id="product_id" name="product_id" required data-inventory-product>
                 {% for product in products %}
-                    <option value="{{ product.id }}">{{ product.nombre }}</option>
+                    <option
+                        value="{{ product.id }}"
+                        data-package-units="{{ product.unidades_por_paquete }}"
+                        data-sale-price="{{ product.precio_venta }}"
+                        data-cost-price="{{ product.precio_costo }}"
+                        data-purchase-unit="{{ product.unidad_compra }}"
+                    >
+                        {{ product.nombre }}
+                    </option>
                 {% endfor %}
             </select>
 
             <label for="movement_type">Tipo</label>
-            <select id="movement_type" name="movement_type">
+            <select id="movement_type" name="movement_type" data-inventory-type>
                 <option value="compra">Compra</option>
                 <option value="ajuste">Ajuste</option>
                 <option value="venta">Venta manual</option>
             </select>
 
-            <div class="form-grid two-up">
+            <div class="form-grid two-up" data-inventory-quantity-row>
                 <div>
-                    <label for="packages">Paquetes</label>
-                    <input id="packages" name="packages" type="number" placeholder="Opcional">
+                    <label for="packages" data-inventory-packages-label>Paquetes comprados</label>
+                    <input id="packages" name="packages" type="number" min="0" placeholder="Ej. 10" data-inventory-packages>
                 </div>
                 <div>
-                    <label for="units">Unidades</label>
-                    <input id="units" name="units" type="number" required>
+                    <label for="package_units">Unidades por paquete</label>
+                    <input id="package_units" name="package_units" type="number" min="1" value="1" data-inventory-package-units>
                 </div>
             </div>
 
-            <label for="unit_price">Precio unitario</label>
-            <input id="unit_price" name="unit_price" type="number" step="0.01" min="0">
+            <div class="form-grid two-up" data-inventory-cost-row>
+                <div>
+                    <label for="units" data-inventory-units-label>Unidades sueltas</label>
+                    <input id="units" name="units" type="number" placeholder="Opcional" data-inventory-units>
+                </div>
+                <div>
+                    <label for="unit_price" data-inventory-price-label>Costo por paquete (1 paquete)</label>
+                    <input id="unit_price" name="unit_price" type="number" step="0.01" min="0" placeholder="Ej. 18.00" data-inventory-reference-price>
+                </div>
+            </div>
+
+            <label for="sale_price" data-inventory-sale-price-label>Precio de venta por unidad</label>
+            <input id="sale_price" name="sale_price" type="number" step="0.01" min="0" placeholder="Ej. 1.25" data-inventory-sale-price>
+
+            <div class="payment-summary" data-inventory-summary>
+                <span>Unidades a sumar</span>
+                <strong data-inventory-total-units>0</strong>
+            </div>
+
+            <div class="payment-summary" data-inventory-cash-summary>
+                <span>Egreso de caja</span>
+                <strong data-inventory-cash-total>USD 0.00</strong>
+            </div>
 
             <label for="notes">Notas</label>
             <input id="notes" name="notes" placeholder="Opcional">

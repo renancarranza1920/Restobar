@@ -4,8 +4,23 @@
     const confirmTitle = confirmModal?.querySelector(".confirm-dialog-title[data-confirm-title]");
     const confirmMessage = confirmModal?.querySelector(".confirm-dialog-message[data-confirm-message]");
     const confirmAccept = confirmModal?.querySelector("[data-confirm-accept]");
+    const confirmQuantityWrap = confirmModal?.querySelector("[data-confirm-quantity-wrap]");
+    const confirmQuantityInput = confirmModal?.querySelector("[data-confirm-quantity]");
     const confirmCancelButtons = confirmModal
         ? confirmModal.querySelectorAll("[data-confirm-cancel]")
+        : [];
+    const paymentModal = document.querySelector("[data-payment-modal]");
+    const paymentTitle = paymentModal?.querySelector("[data-payment-title]");
+    const paymentAmountNode = paymentModal?.querySelector("[data-payment-amount]");
+    const paymentReceivedWrap = paymentModal?.querySelector("[data-payment-received-wrap]");
+    const paymentReceivedInput = paymentModal?.querySelector("[data-payment-received]");
+    const paymentChangeBox = paymentModal?.querySelector("[data-payment-change-box]");
+    const paymentChangeLabel = paymentModal?.querySelector("[data-payment-change-label]");
+    const paymentChangeNode = paymentModal?.querySelector("[data-payment-change]");
+    const paymentMessage = paymentModal?.querySelector("[data-payment-message]");
+    const paymentAccept = paymentModal?.querySelector("[data-payment-accept]");
+    const paymentCancelButtons = paymentModal
+        ? paymentModal.querySelectorAll("[data-payment-cancel]")
         : [];
     const sidebar = document.querySelector("[data-sidebar]");
     const sidebarBackdrop = document.querySelector("[data-sidebar-backdrop]");
@@ -13,6 +28,9 @@
     const sidebarCollapsedKey = "restobar:sidebar-collapsed";
 
     let pendingConfirmAction = null;
+    let pendingPaymentForm = null;
+    let pendingPaymentAmount = 0;
+    let pendingPaymentIsCash = true;
 
     if ("scrollRestoration" in window.history) {
         window.history.scrollRestoration = "manual";
@@ -220,11 +238,18 @@
         }
 
         pendingConfirmAction = null;
+        if (confirmQuantityWrap) {
+            confirmQuantityWrap.hidden = true;
+        }
+        if (confirmQuantityInput) {
+            confirmQuantityInput.value = "";
+            confirmQuantityInput.removeAttribute("max");
+        }
         confirmModal.hidden = true;
         document.body.classList.remove("modal-open");
     }
 
-    function openConfirmModal(title, message, onAccept) {
+    function openConfirmModal(title, message, onAccept, options = {}) {
         if (!confirmModal || !confirmTitle || !confirmMessage || !confirmAccept) {
             const fallbackMessage = message || title || "¿Deseas continuar?";
             if (window.confirm(fallbackMessage)) {
@@ -236,9 +261,184 @@
         pendingConfirmAction = onAccept;
         confirmTitle.textContent = title || "¿Deseas continuar?";
         confirmMessage.textContent = message || "Confirma esta acción para continuar.";
+        if (confirmQuantityWrap && confirmQuantityInput) {
+            confirmQuantityWrap.hidden = !options.quantity;
+            if (options.quantity) {
+                confirmQuantityInput.value = String(options.quantity.value || 1);
+                confirmQuantityInput.max = String(options.quantity.max || 1);
+                confirmQuantityInput.min = "1";
+            }
+        }
         confirmModal.hidden = false;
         document.body.classList.add("modal-open");
-        confirmAccept.focus();
+        if (options.quantity && confirmQuantityInput) {
+            confirmQuantityInput.focus();
+            confirmQuantityInput.select();
+        } else {
+            confirmAccept.focus();
+        }
+    }
+
+    function moneyFormatter() {
+        return new Intl.NumberFormat(navigator.language || "es-SV", {
+            style: "currency",
+            currency: "USD",
+        });
+    }
+
+    function formatMoney(value) {
+        return moneyFormatter().format(Number(value || 0));
+    }
+
+    function parsePaymentValue(value) {
+        const normalized = String(value || "0").replace(",", ".");
+        const parsed = Number.parseFloat(normalized);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function paymentAmountForForm(form) {
+        const explicitAmount = form.getAttribute("data-payment-amount");
+        if (explicitAmount) {
+            return parsePaymentValue(explicitAmount);
+        }
+
+        const amountField = form.querySelector("[name='amount']");
+        return parsePaymentValue(amountField?.value);
+    }
+
+    function paymentMethodForForm(form) {
+        return (form.querySelector("[name='method']")?.value || "efectivo").toLowerCase();
+    }
+
+    function setHiddenFormValue(form, name, value) {
+        let input = form.querySelector(`input[name="${name}"]`);
+        if (!input) {
+            input = document.createElement("input");
+            input.type = "hidden";
+            input.name = name;
+            form.appendChild(input);
+        }
+        input.value = value;
+    }
+
+    function writePaymentTenderFields(form) {
+        const received = pendingPaymentIsCash
+            ? parsePaymentValue(paymentReceivedInput?.value)
+            : pendingPaymentAmount;
+        const change = pendingPaymentIsCash ? Math.max(received - pendingPaymentAmount, 0) : 0;
+        setHiddenFormValue(form, "tendered_amount", received.toFixed(2));
+        setHiddenFormValue(form, "change_amount", change.toFixed(2));
+    }
+
+    function submitConfirmedPaymentForm(form) {
+        if (!form) {
+            return;
+        }
+
+        form.dataset.paymentConfirmed = "true";
+        if (typeof form.requestSubmit === "function") {
+            form.requestSubmit();
+            return;
+        }
+
+        setFormSubmittingState(true);
+        if ((form.method || "get").toLowerCase() === "post") {
+            storeScrollPosition();
+        }
+        HTMLFormElement.prototype.submit.call(form);
+    }
+
+    function updatePaymentChange() {
+        if (!paymentReceivedInput || !paymentChangeNode || !paymentMessage || !paymentAccept) {
+            return;
+        }
+
+        if (!pendingPaymentIsCash) {
+            paymentChangeNode.textContent = formatMoney(0);
+            paymentMessage.textContent = "Confirma que el cobro con tarjeta fue aprobado.";
+            paymentAccept.disabled = false;
+            paymentChangeBox?.classList.remove("is-warning");
+            return;
+        }
+
+        const received = parsePaymentValue(paymentReceivedInput.value);
+        const change = received - pendingPaymentAmount;
+        const hasEnoughCash = received >= pendingPaymentAmount;
+        paymentChangeNode.textContent = formatMoney(Math.max(change, 0));
+        paymentMessage.textContent = hasEnoughCash
+            ? "Entrega el cambio indicado antes de cerrar el pago."
+            : `Faltan ${formatMoney(Math.abs(change))} para completar el cobro.`;
+        paymentAccept.disabled = !hasEnoughCash;
+        paymentChangeBox?.classList.toggle("is-warning", !hasEnoughCash);
+    }
+
+    function closePaymentModal() {
+        pendingPaymentForm = null;
+        pendingPaymentAmount = 0;
+        pendingPaymentIsCash = true;
+        if (!paymentModal) {
+            return;
+        }
+
+        paymentModal.hidden = true;
+        document.body.classList.remove("modal-open");
+    }
+
+    function openPaymentModal(form) {
+        pendingPaymentForm = form;
+        pendingPaymentAmount = paymentAmountForForm(form);
+        pendingPaymentIsCash = paymentMethodForForm(form) === "efectivo";
+
+        if (!paymentModal || !paymentTitle || !paymentAmountNode || !paymentAccept) {
+            submitForm(form);
+            return;
+        }
+
+        const label = form.getAttribute("data-payment-label") || "Pago";
+        paymentTitle.textContent = pendingPaymentIsCash ? `Pago en efectivo - ${label}` : `Pago con tarjeta - ${label}`;
+        paymentAmountNode.textContent = formatMoney(pendingPaymentAmount);
+
+        if (paymentReceivedWrap && paymentReceivedInput) {
+            paymentReceivedWrap.hidden = !pendingPaymentIsCash;
+            paymentReceivedInput.value = pendingPaymentIsCash ? pendingPaymentAmount.toFixed(2) : "";
+        }
+        if (paymentChangeLabel) {
+            paymentChangeLabel.textContent = pendingPaymentIsCash ? "Cambio a entregar" : "Cambio";
+        }
+
+        paymentModal.hidden = false;
+        document.body.classList.add("modal-open");
+        updatePaymentChange();
+
+        if (pendingPaymentIsCash && paymentReceivedInput) {
+            paymentReceivedInput.focus();
+            paymentReceivedInput.select();
+        } else {
+            paymentAccept.focus();
+        }
+    }
+
+    function openCancelItemConfirm(form, title, message) {
+        const maxQuantity = Math.max(Number.parseInt(form.dataset.cancelItemMax || "1", 10) || 1, 1);
+        const quantityInput = form.querySelector("[data-cancel-item-quantity]");
+        openConfirmModal(
+            title,
+            message,
+            () => {
+                const quantity = Math.max(
+                    1,
+                    Math.min(
+                        Number.parseInt(confirmQuantityInput?.value || "1", 10) || 1,
+                        maxQuantity
+                    )
+                );
+                if (quantityInput) {
+                    quantityInput.value = String(quantity);
+                }
+                submitForm(form);
+            },
+            { quantity: { value: maxQuantity, max: maxQuantity } }
+        );
     }
 
     function submitForm(form) {
@@ -608,7 +808,7 @@
         }
 
         const submitter = event.target.closest("button, input[type='submit']");
-        if (!submitter || !submitter.hasAttribute("data-confirm-title")) {
+        if (!submitter) {
             return;
         }
 
@@ -617,7 +817,21 @@
             return;
         }
 
+        if (!submitter.hasAttribute("data-confirm-title")) {
+            return;
+        }
+
         event.preventDefault();
+
+        if (form.hasAttribute("data-cancel-item-form")) {
+            openCancelItemConfirm(
+                form,
+                submitter.getAttribute("data-confirm-title"),
+                submitter.getAttribute("data-confirm-message")
+            );
+            return;
+        }
+
         openConfirmModal(
             submitter.getAttribute("data-confirm-title"),
             submitter.getAttribute("data-confirm-message"),
@@ -640,6 +854,22 @@
             }
         }
 
+        if (form.hasAttribute("data-payment-form") && form.dataset.paymentConfirmed !== "true") {
+            event.preventDefault();
+            openPaymentModal(form);
+            return;
+        }
+
+        if (form.hasAttribute("data-cancel-item-form")) {
+            event.preventDefault();
+            openCancelItemConfirm(
+                form,
+                form.getAttribute("data-confirm-title"),
+                form.getAttribute("data-confirm-message")
+            );
+            return;
+        }
+
         const title = form.getAttribute("data-confirm-title");
         if (title) {
             event.preventDefault();
@@ -655,10 +885,10 @@
     if (confirmAccept) {
         confirmAccept.addEventListener("click", () => {
             const action = pendingConfirmAction;
-            closeConfirmModal();
             if (action) {
                 action();
             }
+            closeConfirmModal();
         });
     }
 
@@ -666,9 +896,50 @@
         button.addEventListener("click", closeConfirmModal);
     });
 
+    if (confirmQuantityInput) {
+        confirmQuantityInput.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" || !confirmAccept) {
+                return;
+            }
+
+            event.preventDefault();
+            confirmAccept.click();
+        });
+    }
+
+    if (paymentReceivedInput) {
+        paymentReceivedInput.addEventListener("input", updatePaymentChange);
+        paymentReceivedInput.addEventListener("keydown", (event) => {
+            if (event.key !== "Enter" || !paymentAccept || paymentAccept.disabled) {
+                return;
+            }
+
+            event.preventDefault();
+            paymentAccept.click();
+        });
+    }
+
+    if (paymentAccept) {
+        paymentAccept.addEventListener("click", () => {
+            const form = pendingPaymentForm;
+            if (!form || paymentAccept.disabled) {
+                return;
+            }
+
+            writePaymentTenderFields(form);
+            closePaymentModal();
+            submitConfirmedPaymentForm(form);
+        });
+    }
+
+    paymentCancelButtons.forEach((button) => {
+        button.addEventListener("click", closePaymentModal);
+    });
+
     document.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
             closeConfirmModal();
+            closePaymentModal();
             closeSidebar();
         }
     });
@@ -720,5 +991,217 @@
             );
             window.location.assign(nextUrl.toString());
         });
+    }
+
+    const inventoryForm = document.querySelector("[data-inventory-form]");
+    if (inventoryForm) {
+        const productSelect = inventoryForm.querySelector("[data-inventory-product]");
+        const typeSelect = inventoryForm.querySelector("[data-inventory-type]");
+        const packagesInput = inventoryForm.querySelector("[data-inventory-packages]");
+        const packagesLabel = inventoryForm.querySelector("[data-inventory-packages-label]");
+        const packageUnitsInput = inventoryForm.querySelector("[data-inventory-package-units]");
+        const quantityRow = inventoryForm.querySelector("[data-inventory-quantity-row]");
+        const costRow = inventoryForm.querySelector("[data-inventory-cost-row]");
+        const unitsInput = inventoryForm.querySelector("[data-inventory-units]");
+        const unitsLabel = inventoryForm.querySelector("[data-inventory-units-label]");
+        const priceLabel = inventoryForm.querySelector("[data-inventory-price-label]");
+        const referencePriceInput = inventoryForm.querySelector("[data-inventory-reference-price]");
+        const salePriceInput = inventoryForm.querySelector("[data-inventory-sale-price]");
+        const salePriceLabel = inventoryForm.querySelector("[data-inventory-sale-price-label]");
+        const inventorySummary = inventoryForm.querySelector("[data-inventory-summary]");
+        const summaryLabel = inventoryForm.querySelector("[data-inventory-summary] span");
+        const totalUnitsNode = inventoryForm.querySelector("[data-inventory-total-units]");
+        const cashSummary = inventoryForm.querySelector("[data-inventory-cash-summary]");
+        const cashSummaryLabel = inventoryForm.querySelector("[data-inventory-cash-summary] span");
+        const cashTotalNode = inventoryForm.querySelector("[data-inventory-cash-total]");
+
+        function numericValue(input) {
+            const value = Number.parseFloat(input?.value || "0");
+            return Number.isFinite(value) ? value : 0;
+        }
+
+        function selectedProductOption() {
+            return productSelect?.selectedOptions?.[0] || null;
+        }
+
+        function loadProductDefaults() {
+            const option = selectedProductOption();
+            if (!option) {
+                return;
+            }
+
+            if (packageUnitsInput) {
+                packageUnitsInput.value = option.dataset.packageUnits || "1";
+            }
+            if (salePriceInput) {
+                salePriceInput.value = option.dataset.salePrice || "";
+            }
+        }
+
+        function setSectionVisible(section, visible, displayValue) {
+            if (!section) {
+                return;
+            }
+
+            section.hidden = !visible;
+            section.style.display = visible ? displayValue : "none";
+        }
+
+        function syncInventorySummary() {
+            const movementType = typeSelect?.value || "compra";
+            const packages = Math.max(Math.trunc(numericValue(packagesInput)), 0);
+            const packageUnits = Math.max(Math.trunc(numericValue(packageUnitsInput)), 1);
+            const units = Math.trunc(numericValue(unitsInput));
+            const referencePrice = Math.max(numericValue(referencePriceInput), 0);
+            const salePrice = Math.max(numericValue(salePriceInput), 0);
+            const purchaseUnits = (packages * packageUnits) + Math.max(units, 0);
+            const saleUnits = (packages * packageUnits) + Math.abs(units);
+            const totalUnits = movementType === "ajuste"
+                ? 0
+                : (movementType === "venta" ? saleUnits : purchaseUnits);
+            const cashTotal = movementType === "compra"
+                ? (packages * referencePrice) + (Math.max(units, 0) * (referencePrice / packageUnits))
+                : (movementType === "venta" ? saleUnits * salePrice : 0);
+
+            if (movementType === "compra") {
+                setSectionVisible(quantityRow, true, "grid");
+                setSectionVisible(costRow, true, "grid");
+                setSectionVisible(inventorySummary, true, "flex");
+                setSectionVisible(cashSummary, true, "flex");
+                if (packagesLabel) {
+                    packagesLabel.textContent = "Paquetes comprados";
+                }
+                if (packagesInput) {
+                    packagesInput.disabled = false;
+                }
+                if (packageUnitsInput) {
+                    packageUnitsInput.disabled = false;
+                }
+                if (unitsInput) {
+                    unitsInput.disabled = false;
+                    unitsInput.min = "0";
+                }
+                if (referencePriceInput) {
+                    referencePriceInput.disabled = false;
+                }
+                if (unitsLabel) {
+                    unitsLabel.textContent = "Unidades sueltas";
+                }
+                if (priceLabel) {
+                    priceLabel.textContent = "Costo por paquete (1 paquete)";
+                }
+                if (referencePriceInput) {
+                    referencePriceInput.placeholder = "Ej. 18.00";
+                }
+                if (salePriceLabel) {
+                    salePriceLabel.textContent = "Precio de venta por unidad";
+                }
+                if (summaryLabel) {
+                    summaryLabel.textContent = "Unidades a sumar";
+                }
+                if (cashSummaryLabel) {
+                    cashSummaryLabel.textContent = "Egreso de caja";
+                }
+            } else if (movementType === "venta") {
+                setSectionVisible(quantityRow, true, "grid");
+                setSectionVisible(costRow, true, "grid");
+                setSectionVisible(inventorySummary, true, "flex");
+                setSectionVisible(cashSummary, true, "flex");
+                if (packagesLabel) {
+                    packagesLabel.textContent = "Paquetes a vender";
+                }
+                if (packagesInput) {
+                    packagesInput.disabled = false;
+                }
+                if (packageUnitsInput) {
+                    packageUnitsInput.disabled = false;
+                }
+                if (unitsInput) {
+                    unitsInput.disabled = false;
+                    unitsInput.min = "0";
+                }
+                if (referencePriceInput) {
+                    referencePriceInput.disabled = false;
+                }
+                if (unitsLabel) {
+                    unitsLabel.textContent = "Unidades a vender";
+                }
+                if (priceLabel) {
+                    priceLabel.textContent = "Precio de referencia";
+                }
+                if (referencePriceInput) {
+                    referencePriceInput.value = "";
+                    referencePriceInput.placeholder = "No aplica";
+                    referencePriceInput.disabled = true;
+                }
+                if (salePriceLabel) {
+                    salePriceLabel.textContent = "Precio de venta por unidad";
+                }
+                if (summaryLabel) {
+                    summaryLabel.textContent = "Unidades a vender";
+                }
+                if (cashSummaryLabel) {
+                    cashSummaryLabel.textContent = "Ingreso de caja";
+                }
+            } else {
+                setSectionVisible(quantityRow, false, "grid");
+                setSectionVisible(costRow, false, "grid");
+                setSectionVisible(inventorySummary, false, "flex");
+                setSectionVisible(cashSummary, false, "flex");
+                if (packagesLabel) {
+                    packagesLabel.textContent = "Paquetes";
+                }
+                if (packagesInput) {
+                    packagesInput.disabled = true;
+                }
+                if (packageUnitsInput) {
+                    packageUnitsInput.disabled = true;
+                }
+                if (unitsInput) {
+                    unitsInput.disabled = true;
+                    unitsInput.value = "";
+                    unitsInput.min = "0";
+                }
+                if (referencePriceInput) {
+                    referencePriceInput.disabled = true;
+                    referencePriceInput.value = "";
+                    referencePriceInput.placeholder = "No aplica";
+                }
+                if (unitsLabel) {
+                    unitsLabel.textContent = "Unidades";
+                }
+                if (priceLabel) {
+                    priceLabel.textContent = "Costo";
+                }
+                if (salePriceLabel) {
+                    salePriceLabel.textContent = "Precio de venta por unidad";
+                }
+                if (summaryLabel) {
+                    summaryLabel.textContent = "Movimiento de stock";
+                }
+                if (cashSummaryLabel) {
+                    cashSummaryLabel.textContent = "Caja";
+                }
+            }
+
+            if (totalUnitsNode) {
+                totalUnitsNode.textContent = totalUnits.toLocaleString(localDateLocale());
+            }
+            if (cashTotalNode) {
+                cashTotalNode.textContent = formatMoney(cashTotal);
+            }
+        }
+
+        productSelect?.addEventListener("change", () => {
+            loadProductDefaults();
+            syncInventorySummary();
+        });
+        typeSelect?.addEventListener("change", syncInventorySummary);
+        [packagesInput, packageUnitsInput, unitsInput, referencePriceInput, salePriceInput].forEach((input) => {
+            input?.addEventListener("input", syncInventorySummary);
+        });
+
+        loadProductDefaults();
+        syncInventorySummary();
     }
 })();

@@ -1,6 +1,6 @@
 import csv
 import re
-from datetime import date, datetime
+from datetime import datetime
 from io import BytesIO, StringIO
 from pathlib import Path
 from uuid import uuid4
@@ -43,6 +43,7 @@ from .models import (
     MovimientoInventario,
     Orden,
     OrdenDivision,
+    OrdenDivisionItem,
     OrdenItem,
     Pago,
     Producto,
@@ -55,6 +56,7 @@ from .services import (
     ADMIN_ROLE_CODE,
     add_or_increment_order_item,
     audit_event,
+    available_stock_units,
     bool_from_form,
     build_split_matrix,
     clear_divisiones,
@@ -92,8 +94,10 @@ from .services import (
     item_can_be_delivered,
     item_can_be_prepared,
     local_now,
+    local_today,
     localize_datetime,
     normalize_item_delivery_states,
+    money as normalize_money,
     order_can_receive_payment,
     parse_date_value,
     parse_decimal,
@@ -107,7 +111,10 @@ from .services import (
     session_cash_expected,
     session_sales_total,
     settle_order,
+    stock_request_errors,
+    order_stock_errors,
     sync_order,
+    LOW_STOCK_THRESHOLD,
     theme_choices,
     user_can,
     valid_role_code,
@@ -139,17 +146,109 @@ def api_permission_denied():
 
 
 def parse_date_filter(raw_value):
-    return parse_date_value(raw_value, date.today())
+    return parse_date_value(raw_value, local_today())
 
 
 def parse_report_range():
-    today = date.today()
+    today = local_today()
     default_start = today.replace(day=1)
     start_date = parse_date_value(request.args.get("desde"), default_start)
     end_date = parse_date_value(request.args.get("hasta"), today)
     if start_date > end_date:
         start_date, end_date = end_date, start_date
     return start_date, end_date
+
+
+def ticket_payment_key(order_id, division_id=None):
+    return f"division:{division_id}" if division_id else str(order_id)
+
+
+def remember_ticket_payment(order_id, amount, method, division_id=None):
+    received = parse_decimal(request.form.get("tendered_amount"), amount)
+    if method != "efectivo" or received <= 0:
+        received = amount
+    if received < amount:
+        received = amount
+
+    change = received - amount if method == "efectivo" else parse_decimal("0")
+    ticket_payments = dict(session.get("ticket_payments", {}))
+    ticket_payments[ticket_payment_key(order_id, division_id)] = {
+        "method": method,
+        "amount": f"{amount:.2f}",
+        "received": f"{received:.2f}",
+        "change": f"{change:.2f}",
+    }
+    session["ticket_payments"] = ticket_payments
+
+
+def ticket_payment_context(order, total=None, division_id=None):
+    ticket_payments = session.get("ticket_payments", {})
+    stored = ticket_payments.get(ticket_payment_key(order.id, division_id), {})
+    latest_payment = order.pagos[-1] if order.pagos else None
+    method = stored.get("method") or (latest_payment.metodo if latest_payment else "")
+    fallback_total = total if total is not None else order.total
+    amount = parse_decimal(
+        stored.get("amount"),
+        total if total is not None else (latest_payment.monto if latest_payment else fallback_total),
+    )
+    received = parse_decimal(
+        stored.get("received"),
+        fallback_total if division_id is not None else (order.total_pagado if latest_payment else parse_decimal("0")),
+    )
+    change = parse_decimal(stored.get("change"))
+
+    return {
+        "method": method,
+        "amount": amount,
+        "received": received,
+        "change": change,
+    }
+
+
+def ticket_lines_for_order(order):
+    return [
+        {
+            "quantity": item.cantidad,
+            "description": item.producto.nombre if item.producto else "-",
+            "notes": item.notas,
+            "subtotal": item.subtotal,
+        }
+        for item in order.items_activos
+    ]
+
+
+def ticket_lines_for_division(division):
+    lines = []
+    for division_item in division.items:
+        order_item = division_item.orden_item
+        product = order_item.producto if order_item else None
+        lines.append(
+            {
+                "quantity": division_item.cantidad,
+                "description": product.nombre if product else "-",
+                "notes": order_item.notas if order_item else "",
+                "subtotal": division_item.subtotal,
+            }
+        )
+    return lines
+
+
+def flash_low_stock_for_order(order):
+    seen_product_ids = set()
+    for item in order.items_activos:
+        product = item.producto
+        if (
+            not product
+            or not product.controla_stock
+            or product.id in seen_product_ids
+            or product.stock_actual > LOW_STOCK_THRESHOLD
+        ):
+            continue
+        seen_product_ids.add(product.id)
+        flash(
+            f"Stock bajo: {product.nombre} queda con {product.stock_actual} unidades.",
+            "warning",
+        )
 
 
 def flash_form_errors(errors):
@@ -218,11 +317,18 @@ def extract_product_payload(existing=None):
 
     name = (request.form.get("name") or "").strip()
     category_id = parse_int(request.form.get("category_id"))
-    cost_price = parse_decimal(request.form.get("cost_price"))
+    package_cost = parse_decimal(request.form.get("cost_price"))
     sale_price = parse_decimal(request.form.get("sale_price"))
     purchase_unit = (request.form.get("purchase_unit") or "unidad").strip() or "unidad"
     units_per_package = max(parse_int(request.form.get("units_per_package"), 1), 1)
-    current_stock = parse_int(request.form.get("current_stock"), 0)
+    stock_packages = parse_int(request.form.get("stock_packages"), 0)
+    stock_units = parse_int(request.form.get("current_stock"), 0)
+    current_stock = (stock_packages * units_per_package) + stock_units
+    cost_price = (
+        normalize_money(package_cost / units_per_package)
+        if package_cost > 0
+        else parse_decimal("0")
+    )
     manages_stock = bool_from_form(request.form.get("manages_stock"))
     available = bool_from_form(request.form.get("available"))
     remove_image = bool_from_form(request.form.get("remove_image"))
@@ -247,7 +353,7 @@ def extract_product_payload(existing=None):
         errors.append("La categoria seleccionada no existe.")
     if sale_price <= 0:
         errors.append("El precio de venta debe ser mayor que cero.")
-    if current_stock < 0:
+    if stock_packages < 0 or stock_units < 0 or current_stock < 0:
         errors.append("El stock inicial no puede ser negativo.")
 
     if errors and uploaded_image:
@@ -547,7 +653,9 @@ def build_pdf_response(filename, start_date, end_date, report):
 
 def allow_ticket_access():
     return current_user.is_authenticated and (
-        user_can(current_user, "ordenes.ticket") or user_can(current_user, "cocina.view")
+        user_can(current_user, "ordenes.ticket")
+        or user_can(current_user, "cocina.view")
+        or user_can(current_user, "caja")
     )
 
 
@@ -1534,12 +1642,19 @@ def detalle_orden(order_id):
     people_count = max(2, min(10, people_count))
 
     can_charge, charge_message = order_can_receive_payment(current_user, order)
+    products = get_productos(disponibles_only=True)
 
     return render_template(
         "order_detail.html",
         page_title=f"Orden #{order.id}",
         order=order,
-        products=get_productos(disponibles_only=True),
+        products=products,
+        quick_stock_available={
+            product.id: available_stock_units(product)
+            for product in products
+            if product.controla_stock
+        },
+        low_stock_threshold=LOW_STOCK_THRESHOLD,
         split_mode=split_mode,
         split_people_count=people_count,
         split_matrix=build_split_matrix(order, people_count),
@@ -1566,23 +1681,60 @@ def ticket_orden(order_id):
     if order is None:
         flash("La orden no existe.", "error")
         return redirect(url_for("web.ordenes"))
+    if order.estado != "pagada":
+        flash("El ticket de venta solo esta disponible cuando la orden ya fue pagada.", "warning")
+        return redirect(url_for("web.detalle_orden", order_id=order.id))
 
-    return render_template("ticket_receipt.html", order=order)
+    return render_template(
+        "ticket_receipt.html",
+        order=order,
+        ticket_lines=ticket_lines_for_order(order),
+        ticket_payment=ticket_payment_context(order),
+        ticket_total=order.total,
+        ticket_number=str(order.id),
+        ticket_label=None,
+        printed_by=current_user.nombre_completo or current_user.nickname,
+    )
 
 
-@web_bp.get("/ordenes/<int:order_id>/ticket-cocina")
+@web_bp.get("/divisiones/<int:division_id>/ticket")
 @login_required
-def ticket_cocina(order_id):
+def ticket_division(division_id):
     if not allow_ticket_access():
         flash("No tienes permiso para ver tickets.", "error")
         return redirect(url_for(default_endpoint_for_user(current_user)))
 
-    order = get_order(order_id)
-    if order is None:
-        flash("La orden no existe.", "error")
+    division = (
+        OrdenDivision.query.options(
+            joinedload(OrdenDivision.orden).joinedload(Orden.mesa),
+            joinedload(OrdenDivision.items)
+            .joinedload(OrdenDivisionItem.orden_item)
+            .joinedload(OrdenItem.producto),
+        )
+        .filter_by(id=division_id)
+        .first()
+    )
+    if division is None:
+        flash("La cuenta separada no existe.", "error")
         return redirect(url_for("web.ordenes"))
+    if not division.pagada:
+        flash("El ticket de una cuenta separada solo esta disponible cuando ya fue pagada.", "warning")
+        return redirect(url_for("web.detalle_orden", order_id=division.orden_id))
 
-    return render_template("ticket_kitchen.html", order=order)
+    return render_template(
+        "ticket_receipt.html",
+        order=division.orden,
+        ticket_lines=ticket_lines_for_division(division),
+        ticket_payment=ticket_payment_context(
+            division.orden,
+            total=division.total,
+            division_id=division.id,
+        ),
+        ticket_total=division.total,
+        ticket_number=f"{division.orden_id}-{division.numero_persona}",
+        ticket_label=division.nombre_visible,
+        printed_by=current_user.nombre_completo or current_user.nickname,
+    )
 
 
 @web_bp.post("/ordenes/<int:order_id>/items")
@@ -1647,6 +1799,11 @@ def agregar_item_orden(order_id):
         flash("Selecciona al menos un producto para agregar.", "error")
         return redirect(url_for("web.detalle_orden", order_id=order.id))
 
+    stock_errors = stock_request_errors(selected_lines)
+    if stock_errors:
+        flash(stock_errors[0], "error")
+        return redirect(url_for("web.detalle_orden", order_id=order.id))
+
     changed, message = reset_divisiones_if_possible(order)
     if message:
         flash(message, "info" if changed else "error")
@@ -1674,6 +1831,12 @@ def agregar_item_orden(order_id):
         f"Se agregaron {len(selected_lines)} linea(s) a la orden #{order.id}.",
     )
     db.session.commit()
+
+    for line in selected_lines:
+        product = line["product"]
+        remaining = available_stock_units(product)
+        if remaining is not None and remaining <= LOW_STOCK_THRESHOLD:
+            flash(f"Stock bajo: {product.nombre} queda con {remaining} unidades disponibles.", "warning")
 
     if len(selected_lines) == 1:
         line = selected_lines[0]
@@ -1755,13 +1918,29 @@ def cancelar_item(item_id):
         if not changed and item.orden.divisiones:
             return redirect(request.referrer or url_for("web.detalle_orden", order_id=item.orden_id))
 
-    item.estado = "cancelado"
+    cancel_quantity = parse_int(request.form.get("cancel_quantity"), item.cantidad)
+    cancel_quantity = max(1, min(cancel_quantity, item.cantidad))
+    original_quantity = item.cantidad
+
+    if cancel_quantity >= item.cantidad:
+        item.estado = "cancelado"
+    else:
+        item.cantidad -= cancel_quantity
+
     sync_order(item.orden)
     settle_order(item.orden)
-    audit_event("cancelar_item", "orden_item", item.id, f"Item #{item.id} cancelado.")
+    audit_event(
+        "cancelar_item",
+        "orden_item",
+        item.id,
+        f"Se cancelaron {cancel_quantity} de {original_quantity} unidades del item #{item.id}.",
+    )
     db.session.commit()
 
-    flash("El item fue cancelado.", "success")
+    if cancel_quantity >= original_quantity:
+        flash("El item fue cancelado.", "success")
+    else:
+        flash(f"Se cancelaron {cancel_quantity} unidades del item.", "success")
     return redirect(request.referrer or url_for("web.detalle_orden", order_id=item.orden_id))
 
 
@@ -1852,6 +2031,10 @@ def pagar_division(division_id):
     if not allowed:
         flash(message, "error")
         return redirect(url_for("web.detalle_orden", order_id=division.orden_id))
+    stock_errors = order_stock_errors(division.orden)
+    if stock_errors:
+        flash(stock_errors[0], "error")
+        return redirect(url_for("web.detalle_orden", order_id=division.orden_id))
 
     payment = Pago(orden=division.orden, metodo=method, monto=division.total)
     division.pagada = True
@@ -1860,6 +2043,9 @@ def pagar_division(division_id):
     settle_order(division.orden)
     audit_event("cobrar", "orden", division.orden_id, f"Se cobro {division.nombre_visible}.")
     db.session.commit()
+    remember_ticket_payment(division.orden_id, division.total, method, division_id=division.id)
+    if division.orden.estado == "pagada":
+        flash_low_stock_for_order(division.orden)
 
     flash(f"{division.nombre_visible} quedo cobrada.", "success")
     return redirect(url_for("web.detalle_orden", order_id=division.orden_id))
@@ -1893,6 +2079,10 @@ def pagar_orden(order_id):
     if not allowed:
         flash(message, "error")
         return redirect(url_for("web.detalle_orden", order_id=order.id))
+    stock_errors = order_stock_errors(order)
+    if stock_errors:
+        flash(stock_errors[0], "error")
+        return redirect(url_for("web.detalle_orden", order_id=order.id))
 
     amount = parse_decimal(request.form.get("amount"))
     method = request.form.get("method")
@@ -1913,6 +2103,9 @@ def pagar_orden(order_id):
     settle_order(order)
     audit_event("cobrar", "orden", order.id, f"Se registro pago en orden #{order.id}.", {"monto": amount, "metodo": method})
     db.session.commit()
+    remember_ticket_payment(order.id, amount, method)
+    if order.estado == "pagada":
+        flash_low_stock_for_order(order)
 
     if order.estado == "pagada":
         flash(f"La orden #{order.id} quedo pagada.", "success")
@@ -2257,8 +2450,10 @@ def exportar_reporte(kind):
             [
                 "Producto",
                 "Categoria",
-                "Precio venta",
-                "Precio costo",
+                "Precio venta unidad",
+                "Costo unitario estimado",
+                "Unidad compra",
+                "Unidades por paquete",
                 "Stock",
                 "Disponible",
                 "Imagen",
@@ -2269,6 +2464,8 @@ def exportar_reporte(kind):
                     product.categoria.nombre if product.categoria else "",
                     f"{product.precio_venta}",
                     f"{product.precio_costo}",
+                    product.unidad_compra,
+                    product.unidades_por_paquete,
                     product.stock_actual,
                     "Si" if product.disponible else "No",
                     product.imagen_url or "",
@@ -2281,13 +2478,15 @@ def exportar_reporte(kind):
         movements = get_inventory_for_range(start_date, end_date)
         return build_csv_response(
             f"inventario_{start_date.isoformat()}_{end_date.isoformat()}.csv",
-            ["Fecha", "Producto", "Tipo", "Unidades", "Usuario", "Notas"],
+            ["Fecha", "Producto", "Tipo", "Paquetes", "Unidades", "Precio referencia", "Usuario", "Notas"],
             [
                 [
                     local_datetime_label(movement.created_at),
                     movement.producto.nombre if movement.producto else "",
                     movement.tipo,
+                    movement.cantidad_paquetes or "",
                     movement.cantidad_unidades,
+                    f"{movement.precio_unitario or ''}",
                     movement.usuario.nombre_completo if movement.usuario else "",
                     movement.notas or "",
                 ]
@@ -2357,9 +2556,11 @@ def nuevo_movimiento_inventario():
 def registrar_movimiento_inventario():
     product_id = parse_int(request.form.get("product_id"))
     movement_type = request.form.get("movement_type")
-    packages = request.form.get("packages")
-    units = parse_int(request.form.get("units"))
-    unit_price = parse_decimal(request.form.get("unit_price"), default=None)
+    packages_count = parse_int(request.form.get("packages"), default=0)
+    units = parse_int(request.form.get("units"), default=0)
+    package_units = parse_int(request.form.get("package_units"), default=None)
+    reference_price = parse_decimal(request.form.get("unit_price"), default=None)
+    sale_price = parse_decimal(request.form.get("sale_price"), default=None)
     notes = (request.form.get("notes") or "").strip()
 
     product = db.session.get(Producto, product_id)
@@ -2375,30 +2576,109 @@ def registrar_movimiento_inventario():
     if movement_type not in {"compra", "venta", "ajuste"}:
         flash("El tipo de movimiento no es valido.", "error")
         return redirect(url_for("web.nuevo_movimiento_inventario"))
-    if units == 0:
-        flash("La cantidad de unidades no puede ser cero.", "error")
-        return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+    cash_movement = None
 
     if movement_type == "compra":
-        product.stock_actual += abs(units)
-        stored_units = abs(units)
+        if packages_count < 0 or units < 0:
+            flash("En una compra, paquetes y unidades no pueden ser negativos.", "error")
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+        package_units = max(package_units or product.unidades_por_paquete or 1, 1)
+        stored_units = (packages_count * package_units) + units
+        if stored_units <= 0:
+            flash("Ingresa paquetes o unidades para registrar la compra.", "error")
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+        if reference_price is not None and reference_price > 0:
+            session_open = get_active_cash_session()
+            if session_open is None:
+                flash("Abre caja antes de registrar compras con costo.", "error")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+            unit_cost = normalize_money(reference_price / package_units)
+            purchase_total = normalize_money(
+                (reference_price * packages_count) + (unit_cost * units)
+            )
+            cash_movement = MovimientoCaja(
+                sesion_caja_id=session_open.id,
+                tipo="egreso",
+                concepto=(
+                    f"Compra inventario: {product.nombre} "
+                    f"({packages_count} paquetes, {stored_units} unidades)"
+                ),
+                monto=purchase_total,
+            )
+
+        product.stock_actual += stored_units
+        product.unidades_por_paquete = package_units
+
+        if reference_price is not None and reference_price > 0:
+            product.precio_costo = unit_cost
+        if sale_price is not None and sale_price > 0:
+            product.precio_venta = sale_price
     elif movement_type == "venta":
-        product.stock_actual -= abs(units)
-        stored_units = abs(units)
+        if packages_count < 0:
+            flash("Los paquetes no pueden ser negativos.", "error")
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
+        package_units = max(package_units or product.unidades_por_paquete or 1, 1)
+        stored_units = (max(packages_count, 0) * package_units) + abs(units)
+        if stored_units <= 0:
+            flash("Ingresa unidades o paquetes para registrar la venta manual.", "error")
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
+        if stored_units > product.stock_actual:
+            flash(
+                f"No puedes vender {stored_units} unidades de {product.nombre}; solo hay {product.stock_actual}.",
+                "error",
+            )
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+        effective_sale_price = (
+            sale_price if sale_price is not None and sale_price > 0 else product.precio_venta
+        )
+        if effective_sale_price is None or effective_sale_price <= 0:
+            flash("Ingresa el precio de venta por unidad para registrar la venta manual.", "error")
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+        session_open = get_active_cash_session()
+        if session_open is None:
+            flash("Abre caja antes de registrar una venta manual.", "error")
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+        sale_total = normalize_money(effective_sale_price * stored_units)
+        cash_movement = MovimientoCaja(
+            sesion_caja_id=session_open.id,
+            tipo="ingreso",
+            concepto=f"Venta manual inventario: {product.nombre} ({stored_units} unidades)",
+            monto=sale_total,
+        )
+        reference_price = effective_sale_price
+        product.stock_actual -= stored_units
     else:
-        product.stock_actual += units
-        stored_units = units
+        if sale_price is None or sale_price <= 0:
+            flash("Ingresa el nuevo precio de venta por unidad.", "error")
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+        product.precio_venta = sale_price
+        stored_units = 0
+        reference_price = sale_price
+        if not notes:
+            notes = f"Ajuste de precio de venta a ${sale_price:.2f}"
 
     movement = MovimientoInventario(
         producto_id=product.id,
         tipo=movement_type,
-        cantidad_paquetes=parse_int(packages, default=None) if packages else None,
+        cantidad_paquetes=(
+            packages_count if movement_type != "ajuste" and packages_count else None
+        ),
         cantidad_unidades=stored_units,
-        precio_unitario=unit_price,
+        precio_unitario=reference_price,
         notas=notes or None,
         usuario_id=current_user.id,
     )
     db.session.add(movement)
+    if cash_movement is not None:
+        db.session.add(cash_movement)
     audit_event(
         "movimiento",
         "inventario",
@@ -2406,9 +2686,37 @@ def registrar_movimiento_inventario():
         f"Movimiento de inventario en {product.nombre}.",
         {"tipo": movement_type, "unidades": stored_units},
     )
+    if cash_movement is not None:
+        audit_event(
+            "movimiento",
+            "caja",
+            cash_movement.sesion_caja_id,
+            (
+                f"Egreso automatico por compra de inventario: {product.nombre}."
+                if movement_type == "compra"
+                else f"Ingreso automatico por venta manual: {product.nombre}."
+            ),
+            {"monto": cash_movement.monto, "producto_id": product.id},
+        )
     db.session.commit()
 
-    flash("Movimiento de inventario registrado.", "success")
+    if movement_type == "compra" and cash_movement is not None:
+        flash(
+            f"Movimiento de inventario registrado y egreso de caja por ${cash_movement.monto:.2f}.",
+            "success",
+        )
+    elif movement_type == "venta" and cash_movement is not None:
+        flash(
+            f"Venta manual registrada e ingreso de caja por ${cash_movement.monto:.2f}.",
+            "success",
+        )
+    elif movement_type == "ajuste":
+        flash(
+            f"Ajuste de {product.nombre} registrado correctamente.",
+            "success",
+        )
+    else:
+        flash("Movimiento de inventario registrado.", "success")
     return redirect(url_for("web.inventario"))
 
 

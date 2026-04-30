@@ -53,7 +53,7 @@
                                     <td>{{ product.categoria.nombre if product.categoria else '-' }}</td>
                                     <td>
                                         {% if product.controla_stock %}
-                                            <span class="{% if product.stock_actual <= 5 %}text-danger font-bold{% else %}font-medium{% endif %}">
+                                            <span class="{% if product.stock_actual <= 12 %}text-danger font-bold{% else %}font-medium{% endif %}">
                                                 {{ product.stock_actual }}
                                             </span>
                                         {% else %}
@@ -101,7 +101,9 @@
                             <tr>
                                 <th>Producto</th>
                                 <th>Tipo</th>
+                                <th>Paquetes</th>
                                 <th>Unidades</th>
+                                <th>Costo paquete / ref.</th>
                                 <th>Usuario</th>
                                 <th>Fecha</th>
                             </tr>
@@ -120,7 +122,9 @@
                                             {{ movement.tipo }}
                                         </span>
                                     </td>
+                                    <td>{{ movement.cantidad_paquetes or '-' }}</td>
                                     <td class="font-medium">{{ movement.cantidad_unidades }}</td>
+                                    <td>{{ movement.precio_unitario|money if movement.precio_unitario is not none else '-' }}</td>
                                     <td>{{ movement.usuario.nombre_completo if movement.usuario else '-' }}</td>
                                     <td class="text-xs text-muted" data-local-datetime="{{ movement.created_at|datetime_iso }}">{{ movement.created_at|datetime_short }}</td>
                                 </tr>
