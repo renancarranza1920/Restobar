@@ -80,6 +80,13 @@
                                         <strong>{{ product.stock_actual if product.controla_stock else 'No aplica' }}</strong>
                                     </div>
                                 </div>
+
+                                {% if product.controla_stock and product.stock_actual <= 12 %}
+                                    <div class="product-stock-alert">
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                        <span>Stock critico: quedan {{ product.stock_actual }} unidades.</span>
+                                    </div>
+                                {% endif %}
                             </div>
 
                             <div class="entity-actions">
@@ -116,36 +123,5 @@
         </div>
     </article>
 
-    {% if low_stock_products %}
-        <article class="panel border-danger">
-            <div class="panel-header border-b bg-danger-light">
-                <h2 class="panel-title font-bold text-danger flex items-center gap-2">
-                    <i class="fa-solid fa-triangle-exclamation"></i> Stock crítico
-                </h2>
-                <span class="badge bg-white shadow-sm border border-gray-200 text-muted">
-                    {{ low_stock_products|length }} alerta{{ '' if low_stock_products|length == 1 else 's' }}
-                </span>
-            </div>
-
-            <div class="panel-body p-0">
-                <ul class="filament-list">
-                    {% for product in low_stock_products %}
-                        <li class="list-item hover-row bg-red-50">
-                            <div>
-                                <div class="text-sm font-bold">{{ product.nombre }}</div>
-                                <div class="text-xs text-danger">
-                                    {{ product.categoria.nombre if product.categoria else 'Sin categoría' }}
-                                </div>
-                            </div>
-
-                            <div class="text-sm font-bold text-danger bg-white px-2 py-1 rounded shadow-sm border border-red-100">
-                                {{ product.stock_actual }}
-                            </div>
-                        </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </article>
-    {% endif %}
 </div>
 {% endblock %}

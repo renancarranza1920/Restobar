@@ -210,7 +210,9 @@
                                         <div class="text-sm font-bold">{{ product.nombre }}</div>
                                         <div class="text-xs text-danger">{{ product.categoria.nombre if product.categoria else 'General' }}</div>
                                     </div>
-                                    <div class="text-sm font-bold text-danger bg-white px-2 py-1 rounded shadow-sm border border-red-100">{{ product.stock_actual }} left</div>
+                                    <div class="text-sm font-bold text-danger bg-white px-2 py-1 rounded shadow-sm border border-red-100">
+                                        {{ product.stock_actual }} unidad{{ '' if product.stock_actual == 1 else 'es' }}
+                                    </div>
                                 </li>
                             {% endfor %}
                         </ul>

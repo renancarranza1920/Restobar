@@ -243,7 +243,7 @@ class Producto(db.Model):
 
     @property
     def stock_bajo(self):
-        return self.controla_stock and self.stock_actual <= 5
+        return self.controla_stock and self.stock_actual <= 12
 
     def to_dict(self):
         return {

@@ -108,7 +108,7 @@
                                     {% if user_can(current_user, 'mesas') and mesa.estado != 'ocupada' %}
                                         <form method="post" action="{{ url_for('web.actualizar_limpieza_mesa', mesa_id=mesa.id) }}">
                                             <input type="hidden" name="limpieza_estado" value="{{ 'limpia' if mesa.limpieza_estado == 'sucia' else 'sucia' }}">
-                                            <button class="button {{ 'button-success' if mesa.limpieza_estado == 'sucia' else 'button-warning' }} button-small" type="submit" data-confirm-title="Actualizar limpieza" data-confirm-message="Se cambiará el estado de limpieza de {{ mesa.etiqueta }}.">
+                                            <button class="button {{ 'button-success' if mesa.limpieza_estado == 'sucia' else 'button-warning' }} button-small" type="submit">
                                                 <i class="fa-solid {{ 'fa-broom' if mesa.limpieza_estado == 'sucia' else 'fa-soap' }} mr-1"></i>
                                                 {{ 'Marcar limpia' if mesa.limpieza_estado == 'sucia' else 'Marcar sucia' }}
                                             </button>

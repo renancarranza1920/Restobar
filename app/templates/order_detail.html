@@ -20,13 +20,11 @@
         </div>
 
         <div class="page-actions">
-            <a class="button button-ghost bg-white border-gray-200 shadow-sm hover-lift" href="{{ url_for('web.ticket_orden', order_id=order.id) }}" target="_blank">
-                <i class="fa-solid fa-receipt mr-1"></i> Ticket venta
-            </a>
-            <a class="button button-ghost bg-white border-gray-200 shadow-sm hover-lift" href="{{ url_for('web.ticket_cocina', order_id=order.id) }}" target="_blank">
-                <i class="fa-solid fa-fire-burner mr-1"></i> Ticket cocina
-            </a>
-
+            {% if order.estado == 'pagada' %}
+                <a class="button button-ghost bg-white border-gray-200 shadow-sm hover-lift" href="{{ url_for('web.ticket_orden', order_id=order.id) }}" target="_blank">
+                    <i class="fa-solid fa-receipt mr-1"></i> Ticket venta
+                </a>
+            {% endif %}
             {% if user_can(current_user, 'caja') and order.total_pagado == 0 and order.estado == 'abierta' and (owner_user or not has_delivered_items) %}
                 <form method="post" action="{{ url_for('web.cancelar_orden', order_id=order.id) }}" data-confirm-title="Cancelar orden" data-confirm-message="Se cancelara la orden completa #{{ order.id }}. Esta accion no se puede deshacer facilmente.">
                     <button class="button button-danger shadow-sm hover-lift" type="submit">
@@ -111,7 +109,8 @@
 
                                 <div class="quick-product-grid">
                                     {% for product in category_products %}
-                                        <article class="quick-product-card" data-product-card data-product-search="{{ (product.nombre ~ ' ' ~ category_name)|lower }}" data-product-price="{{ product.precio_venta }}">
+                                        {% set stock_available = quick_stock_available.get(product.id) if product.controla_stock else none %}
+                                        <article class="quick-product-card" data-product-card data-product-search="{{ (product.nombre ~ ' ' ~ category_name)|lower }}" data-product-price="{{ product.precio_venta }}" data-stock-managed="{{ '1' if product.controla_stock else '0' }}" data-stock-available="{{ stock_available if product.controla_stock else '' }}" data-low-stock-threshold="{{ low_stock_threshold }}">
                                             <input type="hidden" name="product_ids" value="{{ product.id }}">
 
                                             <div class="quick-product-media">
@@ -127,12 +126,24 @@
                                                 <span>{{ product.precio_venta|money }}</span>
                                             </div>
 
+                                            {% if product.controla_stock %}
+                                                <div class="quick-stock-pill {{ 'is-empty' if stock_available <= 0 else ('is-low' if stock_available <= low_stock_threshold else '') }}">
+                                                    {% if stock_available <= 0 %}
+                                                        Sin stock
+                                                    {% elif stock_available <= low_stock_threshold %}
+                                                        Stock bajo: {{ stock_available }}
+                                                    {% else %}
+                                                        Stock: {{ stock_available }}
+                                                    {% endif %}
+                                                </div>
+                                            {% endif %}
+
                                             <div class="quick-product-controls" aria-label="Cantidad para {{ product.nombre }}">
                                                 <button class="quick-qty-button" type="button" data-qty-step="-1" aria-label="Quitar {{ product.nombre }}">
                                                     <i class="fa-solid fa-minus"></i>
                                                 </button>
-                                                <input class="quick-qty-input" type="number" min="0" value="0" name="quantity_{{ product.id }}" data-qty-input data-price="{{ product.precio_venta }}" aria-label="Cantidad de {{ product.nombre }}">
-                                                <button class="quick-qty-button quick-qty-add" type="button" data-qty-step="1" aria-label="Agregar {{ product.nombre }}">
+                                                <input class="quick-qty-input" type="number" min="0" {% if product.controla_stock %}max="{{ stock_available }}"{% endif %} value="0" name="quantity_{{ product.id }}" data-qty-input data-price="{{ product.precio_venta }}" aria-label="Cantidad de {{ product.nombre }}">
+                                                <button class="quick-qty-button quick-qty-add" type="button" data-qty-step="1" aria-label="Agregar {{ product.nombre }}" {% if product.controla_stock and stock_available <= 0 %}disabled{% endif %}>
                                                     <i class="fa-solid fa-plus"></i>
                                                 </button>
                                             </div>
@@ -165,6 +176,10 @@
                     <button class="button button-ghost button-full button-small" type="button" data-quick-clear>
                         <i class="fa-solid fa-eraser mr-2"></i> Limpiar
                     </button>
+                    <div class="inline-alert inline-alert-warning inline-alert-compact" data-quick-stock-alert hidden>
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span></span>
+                    </div>
                 </aside>
             </div>
         </form>
@@ -243,6 +258,7 @@
             const totalItems = root.querySelector("[data-quick-total-items]");
             const totalMoney = root.querySelector("[data-quick-total-money]");
             const submit = root.querySelector("[data-quick-submit]");
+            const stockAlert = root.querySelector("[data-quick-stock-alert]");
             const orderLocked = submit?.dataset.orderLocked === "true";
             let activeCategory = "all";
 
@@ -251,12 +267,40 @@
                 currency: "USD",
             });
 
-            function cleanQuantity(value) {
+            function cleanQuantity(value, maxValue = null) {
                 const nextValue = Number.parseInt(value, 10);
                 if (Number.isNaN(nextValue) || nextValue < 0) {
                     return 0;
                 }
+                if (maxValue !== null && nextValue > maxValue) {
+                    return maxValue;
+                }
                 return nextValue;
+            }
+
+            function stockLimitForCard(card) {
+                if (card?.dataset.stockManaged !== "1") {
+                    return null;
+                }
+                const maxValue = Number.parseInt(card.dataset.stockAvailable || "0", 10);
+                return Number.isNaN(maxValue) ? 0 : Math.max(maxValue, 0);
+            }
+
+            function showStockAlert(message) {
+                if (!stockAlert) {
+                    return;
+                }
+                const copy = stockAlert.querySelector("span");
+                if (copy) {
+                    copy.textContent = message;
+                }
+                stockAlert.hidden = false;
+            }
+
+            function hideStockAlert() {
+                if (stockAlert) {
+                    stockAlert.hidden = true;
+                }
             }
 
             function updateSummary() {
@@ -265,11 +309,16 @@
 
                 cards.forEach((card) => {
                     const input = card.querySelector("[data-qty-input]");
-                    const quantity = cleanQuantity(input?.value);
+                    const maxValue = stockLimitForCard(card);
+                    const quantity = cleanQuantity(input?.value, maxValue);
                     const price = Number.parseFloat(input?.dataset.price || "0") || 0;
+                    const addButton = card.querySelector("[data-qty-step='1']");
 
                     if (input) {
                         input.value = quantity;
+                    }
+                    if (addButton) {
+                        addButton.disabled = maxValue !== null && maxValue <= 0;
                     }
                     card.classList.toggle("is-selected", quantity > 0);
                     units += quantity;
@@ -323,7 +372,19 @@
                     if (!input) {
                         return;
                     }
-                    input.value = cleanQuantity(input.value) + Number(stepButton.dataset.qtyStep || 0);
+                    const maxValue = stockLimitForCard(card);
+                    const currentValue = cleanQuantity(input.value, maxValue);
+                    const step = Number(stepButton.dataset.qtyStep || 0);
+                    const nextValue = cleanQuantity(currentValue + step, maxValue);
+                    if (step > 0 && maxValue !== null && currentValue >= maxValue) {
+                        showStockAlert(`No puedes agregar mas. Stock disponible: ${maxValue}.`);
+                        updateSummary();
+                        return;
+                    }
+                    if (nextValue < currentValue || maxValue === null || nextValue < maxValue) {
+                        hideStockAlert();
+                    }
+                    input.value = nextValue;
                     updateSummary();
                 }
 
@@ -339,12 +400,21 @@
                         }
                     });
                     updateSummary();
+                    hideStockAlert();
                     search?.focus();
                 }
             });
 
             root.addEventListener("input", (event) => {
                 if (event.target.matches("[data-qty-input]")) {
+                    const card = event.target.closest("[data-product-card]");
+                    const maxValue = stockLimitForCard(card);
+                    const rawValue = Number.parseInt(event.target.value || "0", 10);
+                    const nextValue = cleanQuantity(event.target.value, maxValue);
+                    if (maxValue !== null && rawValue > maxValue) {
+                        showStockAlert(`No puedes agregar mas. Stock disponible: ${maxValue}.`);
+                    }
+                    event.target.value = nextValue;
                     updateSummary();
                     return;
                 }
@@ -355,7 +425,11 @@
 
             form?.addEventListener("submit", (event) => {
                 const selectedUnits = Array.from(root.querySelectorAll("[data-qty-input]")).reduce(
-                    (total, input) => total + cleanQuantity(input.value),
+                    (total, input) =>
+                        total + cleanQuantity(
+                            input.value,
+                            stockLimitForCard(input.closest("[data-product-card]"))
+                        ),
                     0
                 );
                 if (selectedUnits === 0) {

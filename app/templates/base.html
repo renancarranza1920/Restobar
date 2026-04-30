@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='inventory-form-visibility') }}">
     {% block head %}{% endblock %}
 </head>
 <body class="theme-{{ current_theme | default('light') }} filament-body {{ 'auth-body' if current_user.is_authenticated else 'guest-body' }}">
@@ -161,6 +161,10 @@
                 </button>
             </div>
             <p class="confirm-dialog-message" data-confirm-message></p>
+            <label class="confirm-quantity-field" data-confirm-quantity-wrap hidden>
+                <span>Cantidad a cancelar</span>
+                <input data-confirm-quantity type="number" min="1" step="1" inputmode="numeric">
+            </label>
             <div class="confirm-dialog-actions">
                 <button class="button button-ghost" type="button" data-confirm-cancel>Cancelar</button>
                 <button class="button button-danger" type="button" data-confirm-accept>Aceptar</button>
@@ -168,7 +172,45 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <div class="payment-modal" data-payment-modal hidden>
+        <div class="payment-dialog shadow-lg">
+            <div class="payment-dialog-header">
+                <div>
+                    <p class="payment-dialog-kicker">Cobro</p>
+                    <h3 class="payment-dialog-title" data-payment-title>Registrar pago</h3>
+                </div>
+                <button class="payment-dialog-close" type="button" data-payment-cancel aria-label="Cerrar cobro">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="payment-summary">
+                <span>Monto a cobrar</span>
+                <strong data-payment-amount>$0.00</strong>
+            </div>
+
+            <label class="payment-received-field" data-payment-received-wrap>
+                <span>Recibido en efectivo</span>
+                <input data-payment-received type="number" min="0" step="0.01" inputmode="decimal" autocomplete="off">
+            </label>
+
+            <div class="payment-change-box" data-payment-change-box>
+                <span data-payment-change-label>Cambio</span>
+                <strong data-payment-change>$0.00</strong>
+            </div>
+
+            <p class="payment-dialog-message" data-payment-message></p>
+
+            <div class="payment-dialog-actions">
+                <button class="button button-ghost" type="button" data-payment-cancel>Cancelar</button>
+                <button class="button button-success" type="button" data-payment-accept>
+                    <i class="fa-solid fa-check-circle mr-1"></i> Confirmar pago
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js', v='restore-before-payment-changes') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

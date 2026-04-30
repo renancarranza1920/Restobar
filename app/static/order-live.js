@@ -11,6 +11,7 @@
     const chargeStatus = root.querySelector("[data-order-charge-status]");
     const deliveredCount = root.querySelector("[data-order-delivered-count]");
     const confirmModal = document.querySelector("[data-confirm-modal]");
+    const paymentModal = document.querySelector("[data-payment-modal]");
 
     let polling = null;
 
@@ -22,7 +23,7 @@
     }
 
     async function refreshOrderState() {
-        if (confirmModal && !confirmModal.hidden) {
+        if ((confirmModal && !confirmModal.hidden) || (paymentModal && !paymentModal.hidden)) {
             return;
         }
         if (document.body.dataset.formSubmitting === "true") {
