@@ -3,107 +3,74 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Ticket Orden #{{ order.id }}</title>
+    <title>Ticket #{{ ticket_number or order.id }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='ticket.css') }}">
 </head>
 <body class="ticket-body">
-    <section class="ticket-sheet">
-        <header class="ticket-header">
-            <div>
-                <p class="ticket-eyebrow">Ticket de venta</p>
-                <h1>{{ app_name }}</h1>
-                <p>
-                    Orden #{{ order.id }} |
-                    <span data-local-datetime="{{ order.created_at|datetime_iso }}">{{ order.created_at|datetime_short }}</span>
-                </p>
-            </div>
+    <main class="ticket-page">
+        <section class="ticket-sheet">
             <div class="ticket-actions no-print">
-                <button class="button ticket-button" type="button" onclick="window.print()">Imprimir</button>
-                <a class="button ticket-button ticket-button-secondary" href="{{ url_for('web.detalle_orden', order_id=order.id) }}">Volver</a>
+                <button class="ticket-button" type="button" onclick="window.print()">Imprimir</button>
+                <a class="ticket-button ticket-button-secondary" href="{{ url_for('web.detalle_orden', order_id=order.id) }}">Volver</a>
             </div>
-        </header>
 
-        <section class="ticket-meta">
-            <div>
-                <span>Mesa</span>
-                <strong>{{ order.mesa.etiqueta if order.mesa else '-' }}</strong>
-            </div>
-            <div>
-                <span>Cliente</span>
-                <strong>{{ order.nombre_cliente or 'Sin referencia' }}</strong>
-            </div>
-            <div>
-                <span>Atendio</span>
-                <strong>{{ order.usuario.nombre_completo if order.usuario else '-' }}</strong>
-            </div>
-            <div>
-                <span>Estado</span>
-                <strong>{{ order.estado }}</strong>
-            </div>
-        </section>
+            <header class="ticket-header">
+                <p>Fecha: <span data-local-datetime="{{ order.created_at|datetime_iso }}">{{ order.created_at|datetime_short }}</span></p>
+                <p>Ticket No. {{ ticket_number or order.id }}</p>
+                {% if ticket_label %}
+                    <p>Cuenta: {{ ticket_label }}</p>
+                {% endif %}
+                <p>Imprime: {{ printed_by or '-' }}</p>
+            </header>
 
-        <table class="ticket-table">
-            <thead>
-                <tr>
-                    <th>Producto</th>
-                    <th>Cant</th>
-                    <th>Unit</th>
-                    <th>Subtotal</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in order.items_activos %}
+            <div class="ticket-rule"></div>
+
+            <table class="ticket-table">
+                <thead>
                     <tr>
-                        <td>
-                            {{ item.producto.nombre if item.producto else '-' }}
-                            {% if item.notas %}
-                                <small>{{ item.notas }}</small>
-                            {% endif %}
-                        </td>
-                        <td>{{ item.cantidad }}</td>
-                        <td>{{ item.precio_unitario|money }}</td>
-                        <td>{{ item.subtotal|money }}</td>
+                        <th>Cant</th>
+                        <th>Descripcion</th>
+                        <th class="ticket-money">Importe</th>
                     </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <section class="ticket-totals">
-            <div>
-                <span>Total</span>
-                <strong>{{ order.total|money }}</strong>
-            </div>
-            <div>
-                <span>Pagado</span>
-                <strong>{{ order.total_pagado|money }}</strong>
-            </div>
-            <div>
-                <span>Saldo</span>
-                <strong>{{ order.saldo_pendiente|money }}</strong>
-            </div>
-        </section>
-
-        {% if order.pagos %}
-            <section class="ticket-section">
-                <h2>Pagos</h2>
-                <div class="ticket-list">
-                    {% for payment in order.pagos %}
-                        <div class="ticket-list-row">
-                            <span>
-                                {{ payment.metodo|capitalize }} |
-                                <span data-local-datetime="{{ payment.created_at|datetime_iso }}">{{ payment.created_at|datetime_short }}</span>
-                            </span>
-                            <strong>{{ payment.monto|money }}</strong>
-                        </div>
+                </thead>
+                <tbody>
+                    {% for item in ticket_lines %}
+                        <tr>
+                            <td>{{ item.quantity }}</td>
+                            <td>
+                                {{ item.description }}
+                                {% if item.notes %}
+                                    <small>{{ item.notes }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="ticket-money">{{ item.subtotal|money }}</td>
+                        </tr>
                     {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="ticket-rule"></div>
+
+            <section class="ticket-totals">
+                <div class="ticket-total-row ticket-grand-total">
+                    <span>Total</span>
+                    <strong>{{ (ticket_total if ticket_total is defined else order.total)|money }}</strong>
+                </div>
+                <div class="ticket-total-row">
+                    <span>Recibido</span>
+                    <strong>{{ ticket_payment.received|money }}</strong>
+                </div>
+                <div class="ticket-total-row">
+                    <span>Cambio</span>
+                    <strong>{{ ticket_payment.change|money }}</strong>
                 </div>
             </section>
-        {% endif %}
 
-        <footer class="ticket-footer">
-            <p>Gracias por su visita.</p>
-        </footer>
-    </section>
+            <footer class="ticket-footer">
+                <p>Gracias por su compra.</p>
+            </footer>
+        </section>
+    </main>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>

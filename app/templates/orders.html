@@ -67,12 +67,11 @@
                                         </div>
                                         <div class="flex gap-2 border-t border-gray-100 pt-3">
                                             <a class="button button-secondary button-small flex-1 text-center" href="{{ url_for('web.detalle_orden', order_id=order.id) }}">Abrir</a>
-                                            <a class="button button-ghost button-small px-3" href="{{ url_for('web.ticket_orden', order_id=order.id) }}" target="_blank" title="Ticket">
-                                                <i class="fa-solid fa-print"></i>
-                                            </a>
-                                            <a class="button button-ghost button-small px-3" href="{{ url_for('web.ticket_cocina', order_id=order.id) }}" target="_blank" title="Cocina">
-                                                <i class="fa-solid fa-fire-burner"></i>
-                                            </a>
+                                            {% if order.estado == 'pagada' %}
+                                                <a class="button button-ghost button-small px-3" href="{{ url_for('web.ticket_orden', order_id=order.id) }}" target="_blank" title="Ticket">
+                                                    <i class="fa-solid fa-print"></i>
+                                                </a>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>

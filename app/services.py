@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from functools import wraps
 from urllib.parse import urljoin, urlparse
@@ -33,7 +33,7 @@ from .models import (
 
 CENTAVOS = Decimal("0.01")
 ZERO = Decimal("0.00")
-LOW_STOCK_THRESHOLD = 5
+LOW_STOCK_THRESHOLD = 12
 ADMIN_ROLE_CODE = "administrador"
 LEGACY_ADMIN_ROLE_CODES = {"due\u00f1o", "due\u00c3\u00b1o", "dueno"}
 MODULE_PERMISSION_ALIASES = {
@@ -228,7 +228,6 @@ NAV_ITEMS = [
             "web.ordenes",
             "web.detalle_orden",
             "web.ticket_orden",
-            "web.ticket_cocina",
         },
     },
     {
@@ -370,6 +369,19 @@ def local_now():
 
 def local_today():
     return local_now().date()
+
+
+def utc_bounds_for_local_range(start_date, end_date=None):
+    end_date = end_date or start_date
+    timezone_value = app_timezone()
+    local_start = datetime.combine(start_date, time.min, tzinfo=timezone_value)
+    local_end = datetime.combine(
+        end_date + timedelta(days=1), time.min, tzinfo=timezone_value
+    )
+    return (
+        local_start.astimezone(timezone.utc).replace(tzinfo=None),
+        local_end.astimezone(timezone.utc).replace(tzinfo=None),
+    )
 
 
 def role_label(role):
@@ -885,6 +897,70 @@ def grouped_tables():
     return zonas, active_orders_by_table
 
 
+def reserved_stock_units(product_id):
+    total = (
+        db.session.query(db.func.coalesce(db.func.sum(OrdenItem.cantidad), 0))
+        .join(Orden, OrdenItem.orden_id == Orden.id)
+        .filter(OrdenItem.producto_id == product_id)
+        .filter(OrdenItem.estado != "cancelado")
+        .filter(OrdenItem.pagado.is_(False))
+        .filter(Orden.estado != "cancelada")
+        .scalar()
+    )
+    return int(total or 0)
+
+
+def available_stock_units(product):
+    if not product or not product.controla_stock:
+        return None
+    return max(int(product.stock_actual or 0) - reserved_stock_units(product.id), 0)
+
+
+def stock_request_errors(selected_lines):
+    requested_by_product = {}
+    products_by_id = {}
+
+    for line in selected_lines:
+        product = line["product"]
+        if not product.controla_stock:
+            continue
+        requested_by_product[product.id] = (
+            requested_by_product.get(product.id, 0) + line["quantity"]
+        )
+        products_by_id[product.id] = product
+
+    errors = []
+    for product_id, requested in requested_by_product.items():
+        product = products_by_id[product_id]
+        available = available_stock_units(product)
+        if available is not None and requested > available:
+            errors.append(
+                f"No puedes agregar {requested} de {product.nombre}. Solo quedan {available} disponibles en stock."
+            )
+    return errors
+
+
+def order_stock_errors(order):
+    totals = {}
+    products = {}
+
+    for item in order.items_activos:
+        if item.pagado or not item.producto or not item.producto.controla_stock:
+            continue
+        totals[item.producto_id] = totals.get(item.producto_id, 0) + item.cantidad
+        products[item.producto_id] = item.producto
+
+    errors = []
+    for product_id, quantity in totals.items():
+        product = products[product_id]
+        stock = int(product.stock_actual or 0)
+        if quantity > stock:
+            errors.append(
+                f"No puedes cobrar la orden: {product.nombre} tiene {stock} en stock y la orden usa {quantity}."
+            )
+    return errors
+
+
 def get_orders_for_listing(status=None, date_value=None):
     query = Orden.query.options(
         joinedload(Orden.mesa).joinedload(Mesa.zona),
@@ -897,7 +973,10 @@ def get_orders_for_listing(status=None, date_value=None):
         query = query.filter(Orden.estado == status)
 
     if date_value:
-        query = query.filter(db.func.date(Orden.created_at) == date_value)
+        start_utc, end_utc = utc_bounds_for_local_range(date_value)
+        query = query.filter(Orden.created_at >= start_utc).filter(
+            Orden.created_at < end_utc
+        )
 
     return query.all()
 
@@ -921,6 +1000,7 @@ def get_recent_payments(limit=8):
 
 
 def get_orders_for_range(start_date, end_date):
+    start_utc, end_utc = utc_bounds_for_local_range(start_date, end_date)
     return (
         Orden.query.options(
             joinedload(Orden.mesa).joinedload(Mesa.zona),
@@ -930,31 +1010,33 @@ def get_orders_for_range(start_date, end_date):
             ),
             selectinload(Orden.pagos),
         )
-        .filter(db.func.date(Orden.created_at) >= start_date)
-        .filter(db.func.date(Orden.created_at) <= end_date)
+        .filter(Orden.created_at >= start_utc)
+        .filter(Orden.created_at < end_utc)
         .order_by(Orden.created_at.desc())
         .all()
     )
 
 
 def get_payments_for_range(start_date, end_date):
+    start_utc, end_utc = utc_bounds_for_local_range(start_date, end_date)
     return (
         Pago.query.options(joinedload(Pago.orden).joinedload(Orden.mesa))
-        .filter(db.func.date(Pago.created_at) >= start_date)
-        .filter(db.func.date(Pago.created_at) <= end_date)
+        .filter(Pago.created_at >= start_utc)
+        .filter(Pago.created_at < end_utc)
         .order_by(Pago.created_at.desc())
         .all()
     )
 
 
 def get_inventory_for_range(start_date, end_date):
+    start_utc, end_utc = utc_bounds_for_local_range(start_date, end_date)
     return (
         MovimientoInventario.query.options(
             joinedload(MovimientoInventario.producto),
             joinedload(MovimientoInventario.usuario),
         )
-        .filter(db.func.date(MovimientoInventario.created_at) >= start_date)
-        .filter(db.func.date(MovimientoInventario.created_at) <= end_date)
+        .filter(MovimientoInventario.created_at >= start_utc)
+        .filter(MovimientoInventario.created_at < end_utc)
         .order_by(MovimientoInventario.created_at.desc())
         .all()
     )

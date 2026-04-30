@@ -45,7 +45,8 @@
                     {% endif %}
 
                     {% if user_can(current_user, 'ordenes') and order.estado == 'abierta' and not item.pagado and not division_locked and (item.estado != 'entregado' or owner_user) %}
-                        <form method="post" action="{{ url_for('web.cancelar_item', item_id=item.id) }}" data-confirm-title="Cancelar item" data-confirm-message="Se cancelará {{ item.producto.nombre if item.producto else 'este item' }} dentro de la orden #{{ order.id }}.">
+                        <form method="post" action="{{ url_for('web.cancelar_item', item_id=item.id) }}" data-cancel-item-form data-cancel-item-name="{{ item.producto.nombre if item.producto else 'este item' }}" data-cancel-item-max="{{ item.cantidad }}" data-confirm-title="Cancelar item" data-confirm-message="Se cancelará {{ item.producto.nombre if item.producto else 'este item' }} dentro de la orden #{{ order.id }}.">
+                            <input type="hidden" name="cancel_quantity" value="{{ item.cantidad }}" data-cancel-item-quantity>
                             <button class="button button-ghost button-small text-danger border-danger hover:bg-red-50" type="submit">
                                 <i class="fa-solid fa-xmark"></i> Cancelar
                             </button>

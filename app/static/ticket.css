@@ -1,155 +1,164 @@
+@page {
+    size: 80mm auto;
+    margin: 0;
+}
+
+* {
+    box-sizing: border-box;
+}
+
 body.ticket-body {
     margin: 0;
-    background: #efe8de;
-    color: #231d18;
-    font-family: "Segoe UI", Tahoma, sans-serif;
+    background: #eceff3;
+    color: #111;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 12px;
+}
+
+.ticket-page {
+    min-height: 100vh;
+    display: grid;
+    place-items: start center;
+    padding: 18px;
 }
 
 .ticket-sheet {
-    width: min(760px, calc(100% - 2rem));
-    margin: 1.25rem auto;
-    padding: 1.5rem;
-    background: #fffdfa;
-    border-radius: 24px;
-    box-shadow: 0 20px 48px rgba(84, 68, 54, 0.14);
-}
-
-.ticket-sheet-kitchen {
-    max-width: 680px;
-}
-
-.ticket-header,
-.ticket-meta,
-.ticket-totals,
-.ticket-list-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-}
-
-.ticket-header {
-    align-items: start;
-    margin-bottom: 1.25rem;
-}
-
-.ticket-header h1 {
-    margin: 0;
-    font-family: Georgia, "Times New Roman", serif;
-    font-size: 2.1rem;
-}
-
-.ticket-eyebrow,
-.ticket-meta span,
-.ticket-footer,
-.ticket-header p {
-    color: #736456;
-}
-
-.ticket-eyebrow {
-    margin: 0 0 0.35rem;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    font-size: 0.8rem;
+    width: 80mm;
+    min-height: 120mm;
+    padding: 5mm 4mm 7mm;
+    background: #fff;
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.14);
 }
 
 .ticket-actions {
     display: flex;
-    gap: 0.6rem;
-    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-family: "Segoe UI", Arial, sans-serif;
 }
 
 .ticket-button {
-    min-height: 42px;
-    padding: 0.7rem 1rem;
-    border-radius: 999px;
-    border: none;
-    background: #40342b;
-    color: #fff9f2;
+    min-height: 34px;
+    padding: 7px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: #111827;
+    color: #fff;
+    text-decoration: none;
     cursor: pointer;
 }
 
 .ticket-button-secondary {
-    background: #eae1d6;
-    color: #40342b;
+    background: #e5e7eb;
+    color: #111827;
 }
 
-.ticket-meta,
-.ticket-totals,
-.ticket-section {
-    margin-top: 1.1rem;
+.ticket-header {
+    text-align: center;
+    line-height: 1.35;
 }
 
-.ticket-meta {
-    flex-wrap: wrap;
+.ticket-header p,
+.ticket-footer p {
+    margin: 0 0 4px;
 }
 
-.ticket-meta div,
-.ticket-totals div {
-    flex: 1 1 140px;
-    padding: 0.85rem 1rem;
-    background: #f5eee5;
-    border-radius: 18px;
-}
-
-.ticket-meta span,
-.ticket-totals span {
-    display: block;
-    font-size: 0.82rem;
-    margin-bottom: 0.25rem;
+.ticket-rule {
+    margin: 9px 0;
+    border-top: 1px dashed #111;
 }
 
 .ticket-table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 1.2rem;
+    table-layout: fixed;
 }
 
 .ticket-table th,
 .ticket-table td {
-    padding: 0.8rem 0.35rem;
-    border-bottom: 1px dashed #d5c7b9;
-    text-align: left;
+    padding: 3px 0;
     vertical-align: top;
 }
 
 .ticket-table th {
-    font-size: 0.8rem;
-    color: #736456;
+    border-bottom: 1px dashed #111;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
+}
+
+.ticket-table th:nth-child(1),
+.ticket-table td:nth-child(1) {
+    width: 13%;
+    text-align: left;
+}
+
+.ticket-table th:nth-child(2),
+.ticket-table td:nth-child(2) {
+    width: 55%;
+    padding-right: 4px;
+    overflow-wrap: anywhere;
+}
+
+.ticket-table th:nth-child(3),
+.ticket-table td:nth-child(3) {
+    width: 32%;
 }
 
 .ticket-table small {
     display: block;
-    color: #736456;
-    margin-top: 0.2rem;
+    margin-top: 2px;
+    font-size: 10px;
 }
 
-.ticket-section h2 {
-    margin: 0 0 0.75rem;
-    font-size: 1rem;
+.ticket-money {
+    text-align: right;
+    white-space: nowrap;
 }
 
-.ticket-list {
+.ticket-totals {
     display: grid;
-    gap: 0.55rem;
+    gap: 3px;
+}
+
+.ticket-total-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.ticket-grand-total {
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed #111;
+    font-size: 15px;
+    font-weight: 700;
 }
 
 .ticket-footer {
-    margin-top: 1.4rem;
+    margin-top: 16px;
     text-align: center;
+    font-weight: 700;
 }
 
 @media print {
-    body.ticket-body {
+    body.ticket-body,
+    .ticket-page {
+        width: 80mm;
+        min-height: 0;
+        margin: 0;
+        padding: 0;
         background: #fff;
     }
 
+    .ticket-page {
+        display: block;
+    }
+
     .ticket-sheet {
-        width: 100%;
+        width: 80mm;
+        min-height: 0;
         margin: 0;
-        padding: 0;
-        border-radius: 0;
+        padding: 4mm 3mm 6mm;
         box-shadow: none;
     }
 

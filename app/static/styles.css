@@ -60,6 +60,10 @@ body.theme-dark {
     box-sizing: border-box;
 }
 
+[hidden] {
+    display: none !important;
+}
+
 html,
 body {
     min-height: 100%;
@@ -2186,6 +2190,10 @@ body.guest-body.filament-body {
     display: none !important;
 }
 
+.payment-modal[hidden] {
+    display: none !important;
+}
+
 .confirm-modal {
     position: fixed;
     inset: 0;
@@ -2196,10 +2204,28 @@ body.guest-body.filament-body {
     background: rgba(15, 23, 42, 0.42);
 }
 
+.payment-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.5);
+}
+
 .confirm-dialog {
     width: min(100%, 460px);
     border-radius: 24px;
     border: 1px solid var(--line);
+    background: var(--surface);
+    padding: 1.25rem;
+}
+
+.payment-dialog {
+    width: min(100%, 480px);
+    border: 1px solid var(--line);
+    border-radius: 24px;
     background: var(--surface);
     padding: 1.25rem;
 }
@@ -2211,6 +2237,14 @@ body.guest-body.filament-body {
     gap: 1rem;
 }
 
+.payment-dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
 .confirm-dialog-kicker {
     margin: 0 0 0.3rem;
     font-size: 0.72rem;
@@ -2220,9 +2254,23 @@ body.guest-body.filament-body {
     font-weight: 700;
 }
 
+.payment-dialog-kicker {
+    margin: 0 0 0.3rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent-strong);
+    font-weight: 800;
+}
+
 .confirm-dialog-title {
     margin: 0;
     font-size: 1.15rem;
+}
+
+.payment-dialog-title {
+    margin: 0;
+    font-size: 1.2rem;
 }
 
 .confirm-dialog-message {
@@ -2231,7 +2279,47 @@ body.guest-body.filament-body {
     line-height: 1.55;
 }
 
+.confirm-quantity-field {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0 0 1.25rem;
+}
+
+.confirm-quantity-field[hidden] {
+    display: none !important;
+}
+
+.confirm-quantity-field span {
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.confirm-quantity-field input {
+    min-height: 50px;
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: var(--accent-strong);
+}
+
+.payment-dialog-message {
+    min-height: 1.35rem;
+    margin: 0.85rem 0 1rem;
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
 .confirm-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.payment-dialog-actions {
     display: flex;
     justify-content: flex-end;
     gap: 0.75rem;
@@ -2245,6 +2333,79 @@ body.guest-body.filament-body {
     border-radius: 12px;
     background: var(--surface-muted);
     color: var(--muted);
+}
+
+.payment-dialog-close {
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface-muted);
+    color: var(--muted);
+}
+
+.payment-summary,
+.payment-change-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.95rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface-muted);
+}
+
+.payment-summary span,
+.payment-change-box span,
+.payment-received-field span {
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.payment-summary strong,
+.payment-change-box strong {
+    color: var(--text);
+    font-size: 1.45rem;
+    font-weight: 900;
+}
+
+.payment-received-field {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0.8rem 0;
+}
+
+.payment-received-field[hidden] {
+    display: none !important;
+}
+
+.payment-received-field input {
+    min-height: 54px;
+    font-size: 1.35rem;
+    font-weight: 900;
+    color: var(--accent-strong);
+}
+
+.payment-change-box {
+    background: #ecfdf5;
+    border-color: rgba(16, 185, 129, 0.32);
+}
+
+.payment-change-box strong {
+    color: #047857;
+}
+
+.payment-change-box.is-warning {
+    background: #fff7ed;
+    border-color: #fdba74;
+}
+
+.payment-change-box.is-warning strong {
+    color: #9a3412;
 }
 
 body.modal-open {
@@ -2262,6 +2423,10 @@ body.modal-open {
     color: var(--muted);
     font-size: 0.92rem;
     font-weight: 600;
+}
+
+.inline-alert[hidden] {
+    display: none !important;
 }
 
 .inline-alert-warning {
@@ -2511,6 +2676,44 @@ body.modal-open {
     flex-shrink: 0;
     font-weight: 800;
     color: var(--filament-primary);
+}
+
+.quick-stock-pill {
+    justify-self: start;
+    padding: 0.28rem 0.55rem;
+    border: 1px solid rgba(59, 130, 246, 0.24);
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.quick-stock-pill.is-low {
+    border-color: #fdba74;
+    background: #fff7ed;
+    color: #9a3412;
+}
+
+.quick-stock-pill.is-empty {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.product-stock-alert {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: fit-content;
+    margin-top: 0.65rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid #fdba74;
+    border-radius: 999px;
+    background: #fff7ed;
+    color: #9a3412;
+    font-size: 0.78rem;
+    font-weight: 800;
 }
 
 .quick-product-controls {
@@ -2872,9 +3075,10 @@ body.modal-open {
 }
 
 .split-plus-button {
-    background: var(--primary);
+    background: var(--filament-primary);
     color: #fff;
-    border-color: var(--primary);
+    border-color: var(--filament-primary);
+    box-shadow: 0 10px 18px rgba(59, 130, 246, 0.22);
 }
 
 .split-mini-button:disabled,
@@ -3229,6 +3433,9 @@ body.modal-open {
 body.theme-dark .sidebar-close,
 body.theme-dark .mobile-nav-toggle,
 body.theme-dark .confirm-dialog,
+body.theme-dark .payment-dialog,
+body.theme-dark .payment-summary,
+body.theme-dark .payment-change-box,
 body.theme-dark .split-qty-input,
 body.theme-dark .order-item-thumb,
 body.theme-dark .inline-alert,
@@ -3313,8 +3520,9 @@ body.theme-dark .split-mini-button {
 }
 
 body.theme-dark .split-plus-button {
-    background: #3b82f6;
-    border-color: #3b82f6;
+    background: #3b82f6 !important;
+    border-color: #3b82f6 !important;
+    color: #ffffff !important;
 }
 
 body.theme-dark .login-card,

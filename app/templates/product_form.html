@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set package_units_value = product.unidades_por_paquete if product and product.unidades_por_paquete else 1 %}
+{% set package_cost_value = product.precio_costo * package_units_value if product else 0 %}
+{% set stock_packages_value = product.stock_actual // package_units_value if product and product.controla_stock else 0 %}
+{% set stock_units_value = product.stock_actual % package_units_value if product and product.controla_stock else 0 %}
 <div class="filament-dashboard p-4 md:p-6">
 
     <header class="flex justify-between items-end mb-6">
@@ -24,6 +28,7 @@
         method="post"
         action="{{ url_for('web.actualizar_producto', product_id=product.id) if product else url_for('web.crear_producto') }}"
         enctype="multipart/form-data"
+        data-product-form
     >
         <section class="filament-content-grid">
 
@@ -98,43 +103,18 @@
                     </div>
 
                     <div class="panel-body">
-                        <div class="form-grid two-up mb-5" data-price-grid>
-                            <div data-kitchen-extra>
-                                <label for="cost_price" class="block text-sm font-bold text-gray-800 mb-2">Precio de costo</label>
-                                <input
-                                    id="cost_price"
-                                    name="cost_price"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value="{{ product.precio_costo if product else 0 }}"
-                                >
-                            </div>
-
-                            <div data-sale-price-field>
-                                <label for="sale_price" class="block text-sm font-bold text-gray-800 mb-2">
-                                    Precio de venta <span class="text-danger">*</span>
+                        <div class="form-grid two-up mb-5" data-stock-field data-kitchen-extra>
+                            <div>
+                                <label for="stock_packages" class="block text-sm font-bold text-gray-800 mb-2">
+                                    {{ 'Paquetes actuales' if product else 'Paquetes iniciales' }}
                                 </label>
                                 <input
-                                    id="sale_price"
-                                    name="sale_price"
+                                    id="stock_packages"
+                                    name="stock_packages"
                                     type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    value="{{ product.precio_venta if product else '' }}"
-                                    required
-                                >
-                            </div>
-                        </div>
-
-                        <div class="form-grid two-up mb-5" data-kitchen-extra>
-                            <div>
-                                <label for="purchase_unit" class="block text-sm font-bold text-gray-800 mb-2">Unidad de compra</label>
-                                <input
-                                    id="purchase_unit"
-                                    name="purchase_unit"
-                                    value="{{ product.unidad_compra if product else 'unidad' }}"
-                                    placeholder="Ej: Kg, Litro, Unidad"
+                                    min="0"
+                                    value="{{ stock_packages_value }}"
+                                    data-stock-packages-input
                                 >
                             </div>
 
@@ -145,24 +125,74 @@
                                     name="units_per_package"
                                     type="number"
                                     min="1"
-                                    value="{{ product.unidades_por_paquete if product else 1 }}"
+                                    value="{{ package_units_value }}"
+                                    data-units-per-package-input
                                 >
                             </div>
                         </div>
 
-                        <div data-stock-field data-kitchen-extra>
-                            <label for="current_stock" class="block text-sm font-bold text-gray-800 mb-2">
-                                {{ 'Stock actual' if product else 'Stock inicial' }}
+                        <div class="form-grid two-up mb-5" data-price-grid data-kitchen-extra>
+                            <div>
+                                <label for="current_stock" class="block text-sm font-bold text-gray-800 mb-2">
+                                    Unidades sueltas
+                                </label>
+                                <input
+                                    id="current_stock"
+                                    name="current_stock"
+                                    type="number"
+                                    min="0"
+                                    value="{{ stock_units_value }}"
+                                    data-stock-input
+                                >
+                            </div>
+
+                            <div data-kitchen-extra>
+                                <label for="cost_price" class="block text-sm font-bold text-gray-800 mb-2">Costo por paquete (1 paquete)</label>
+                                <input
+                                    id="cost_price"
+                                    name="cost_price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value="{{ package_cost_value }}"
+                                    data-package-cost-input
+                                >
+                            </div>
+                        </div>
+
+                        <div class="mb-5" data-sale-price-field>
+                            <label for="sale_price" class="block text-sm font-bold text-gray-800 mb-2">
+                                Precio de venta por unidad <span class="text-danger">*</span>
                             </label>
                             <input
-                                id="current_stock"
-                                name="current_stock"
+                                id="sale_price"
+                                name="sale_price"
                                 type="number"
-                                value="{{ product.stock_actual if product and product.controla_stock else 0 }}"
-                                data-stock-input
+                                step="0.01"
+                                min="0.01"
+                                value="{{ product.precio_venta if product else '' }}"
+                                required
                             >
+                        </div>
+
+                        <div class="mb-5" data-kitchen-extra>
+                            <label for="purchase_unit" class="block text-sm font-bold text-gray-800 mb-2">Unidad de compra</label>
+                            <input
+                                id="purchase_unit"
+                                name="purchase_unit"
+                                value="{{ product.unidad_compra if product else 'caja' }}"
+                                placeholder="Ej. caja"
+                            >
+                        </div>
+
+                        <div class="payment-summary mb-5" data-product-stock-summary data-kitchen-extra>
+                            <span>Stock total en unidades</span>
+                            <strong data-product-total-stock>{{ product.stock_actual if product and product.controla_stock else 0 }}</strong>
+                        </div>
+
+                        <div data-stock-help-wrap data-kitchen-extra>
                             <p class="text-xs text-muted mt-1" data-stock-help>
-                                Se usa como base para el control de inventario del producto.
+                                El sistema multiplica paquetes por unidades por paquete y guarda ese total como stock en unidades.
                             </p>
                         </div>
                     </div>
@@ -312,6 +342,9 @@
             const stockToggleRow = document.querySelector("[data-stock-toggle-row]");
             const stockField = document.querySelector("[data-stock-field]");
             const stockInput = document.querySelector("[data-stock-input]");
+            const stockPackagesInput = document.querySelector("[data-stock-packages-input]");
+            const unitsPerPackageInput = document.querySelector("[data-units-per-package-input]");
+            const totalStockNode = document.querySelector("[data-product-total-stock]");
             const stockHelp = document.querySelector("[data-stock-help]");
             const priceGrid = document.querySelector("[data-price-grid]");
             const kitchenExtraFields = document.querySelectorAll("[data-kitchen-extra]");
@@ -326,12 +359,30 @@
             }
 
             const initialStockValue = stockInput.value;
-            const defaultStockHelp = "Se usa como base para el control de inventario del producto.";
+            const initialStockPackagesValue = stockPackagesInput?.value || "0";
+            const defaultStockHelp = "El sistema multiplica paquetes por unidades por paquete y guarda ese total como stock en unidades.";
             const disabledStockHelp = "Puedes dejarlo sin control si es un producto externo o si no deseas descontarlo automaticamente.";
             const kitchenStockHelp = "No aplica para productos de cocina. Su control debe hacerse por insumos o ingredientes.";
             const defaultFlowNote = "La categoria define si el producto pasa por cocina.";
             const directFlowNote = "La categoria elegida permite entrega directa y puedes decidir si este producto lleva control de stock.";
             const kitchenFlowNote = "La categoria elegida envia este producto a cocina y desactiva el control de stock del producto final.";
+
+            function numberFromInput(input) {
+                const value = Number.parseInt(input?.value || "0", 10);
+                return Number.isFinite(value) ? value : 0;
+            }
+
+            function syncStockSummary() {
+                if (!totalStockNode) {
+                    return;
+                }
+
+                const packages = Math.max(numberFromInput(stockPackagesInput), 0);
+                const packageUnits = Math.max(numberFromInput(unitsPerPackageInput), 1);
+                const looseUnits = Math.max(numberFromInput(stockInput), 0);
+                const total = stockToggle.checked ? (packages * packageUnits) + looseUnits : 0;
+                totalStockNode.textContent = total.toLocaleString(navigator.language || "es-SV");
+            }
 
             function syncProductMode() {
                 const selectedOption = categorySelect.options[categorySelect.selectedIndex];
@@ -351,6 +402,10 @@
                     });
                     stockToggle.checked = false;
                     stockToggle.disabled = true;
+                    if (stockPackagesInput) {
+                        stockPackagesInput.value = 0;
+                        stockPackagesInput.disabled = true;
+                    }
                     stockInput.value = 0;
                     stockInput.disabled = true;
                     stockHelp.textContent = kitchenStockHelp;
@@ -364,6 +419,7 @@
                     if (kitchenStatusText) {
                         kitchenStatusText.textContent = "Este producto no maneja stock del producto final y tampoco genera alertas de inventario.";
                     }
+                    syncStockSummary();
                     return;
                 }
 
@@ -375,6 +431,9 @@
                 });
                 stockToggle.disabled = false;
                 stockInput.disabled = !stockToggle.checked;
+                if (stockPackagesInput) {
+                    stockPackagesInput.disabled = !stockToggle.checked;
+                }
                 stockField.classList.toggle("opacity-70", !stockToggle.checked);
                 stockToggleRow.classList.remove("opacity-70");
                 stockHelp.textContent = stockToggle.checked ? defaultStockHelp : disabledStockHelp;
@@ -402,10 +461,17 @@
                 if (stockToggle.checked && stockInput.value === "0" && initialStockValue && initialStockValue !== "0") {
                     stockInput.value = initialStockValue;
                 }
+                if (stockToggle.checked && stockPackagesInput && stockPackagesInput.value === "0" && initialStockPackagesValue !== "0") {
+                    stockPackagesInput.value = initialStockPackagesValue;
+                }
+                syncStockSummary();
             }
 
             categorySelect.addEventListener("change", syncProductMode);
             stockToggle.addEventListener("change", syncProductMode);
+            stockPackagesInput?.addEventListener("input", syncStockSummary);
+            stockInput.addEventListener("input", syncStockSummary);
+            unitsPerPackageInput?.addEventListener("input", syncStockSummary);
             syncProductMode();
         })();
     </script>

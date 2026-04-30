@@ -31,13 +31,17 @@
                     <strong class="text-lg text-primary">{{ division.total|money }}</strong>
 
                     {% if user_can(current_user, 'caja') and not division.pagada %}
-                        <form class="flex gap-2" method="post" action="{{ url_for('web.pagar_division', division_id=division.id) }}">
+                        <form class="flex gap-2" method="post" action="{{ url_for('web.pagar_division', division_id=division.id) }}" data-payment-form data-payment-amount="{{ division.total }}" data-payment-label="{{ division.nombre_visible }}">
                             <select name="method" class="text-xs p-1 rounded border-gray-300 w-20">
                                 <option value="efectivo">Efectivo</option>
                                 <option value="tarjeta">Tarjeta</option>
                             </select>
                             <button class="button button-primary button-small px-2 shadow-sm" type="submit" {% if not division.todos_entregados %}disabled{% endif %}>Cobrar</button>
                         </form>
+                    {% elif division.pagada and (user_can(current_user, 'ordenes.ticket') or user_can(current_user, 'caja')) %}
+                        <a class="button button-ghost button-small px-2 shadow-sm" href="{{ url_for('web.ticket_division', division_id=division.id) }}" target="_blank">
+                            <i class="fa-solid fa-receipt mr-1"></i> Ticket
+                        </a>
                     {% endif %}
                 </div>
             </article>
