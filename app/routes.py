@@ -66,6 +66,8 @@ from .services import (
     division_can_receive_payment,
     feature_required,
     feature_definitions,
+    format_local_datetime,
+    get_system_preferences,
     permission_definitions,
     get_active_cash_session,
     get_active_order_for_mesa,
@@ -95,7 +97,6 @@ from .services import (
     item_can_be_prepared,
     local_now,
     local_today,
-    localize_datetime,
     normalize_item_delivery_states,
     money as normalize_money,
     order_can_receive_payment,
@@ -105,6 +106,7 @@ from .services import (
     recent_cash_movements,
     recent_inventory_movements,
     reset_divisiones_if_possible,
+    save_system_preferences,
     save_split_configuration,
     serialize_kitchen_item,
     session_card_total,
@@ -115,8 +117,10 @@ from .services import (
     order_stock_errors,
     sync_order,
     LOW_STOCK_THRESHOLD,
+    system_preference_choices,
     theme_choices,
     user_can,
+    valid_timezone_name,
     valid_role_code,
     validate_split_assignment,
 )
@@ -311,6 +315,35 @@ def delete_uploaded_product_image(image_url):
         file_path.unlink(missing_ok=True)
 
 
+def save_brand_logo(file_storage):
+    if file_storage is None or not file_storage.filename:
+        return None, None
+
+    filename = secure_filename(file_storage.filename)
+    extension = Path(filename).suffix.lower()
+
+    if extension not in IMAGE_EXTENSIONS:
+        return None, "El logo debe ser JPG, PNG, WEBP o GIF."
+
+    upload_dir = current_app.config["BRANDING_UPLOAD_DIR"]
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    generated_name = f"{datetime.utcnow():%Y%m%d%H%M%S}_{uuid4().hex[:10]}{extension}"
+    destination = upload_dir / generated_name
+    file_storage.save(destination)
+    return f"/static/uploads/branding/{generated_name}", None
+
+
+def delete_uploaded_brand_logo(image_url):
+    if not image_url or not image_url.startswith("/static/uploads/branding/"):
+        return
+
+    relative_name = image_url.replace("/static/uploads/branding/", "", 1)
+    file_path = current_app.config["BRANDING_UPLOAD_DIR"] / relative_name
+    if file_path.exists():
+        file_path.unlink(missing_ok=True)
+
+
 def extract_product_payload(existing=None):
     image_url = (request.form.get("image_url") or "").strip()
     uploaded_image, upload_error = save_product_image(request.files.get("image_file"))
@@ -396,6 +429,8 @@ def build_csv_response(filename, headers, rows):
 
 
 def build_pdf_response(filename, start_date, end_date, report):
+    preferences = get_system_preferences()
+    business_name = preferences["business_name"]
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -557,10 +592,10 @@ def build_pdf_response(filename, start_date, end_date, report):
         table.setStyle(TableStyle(commands))
         return table
 
-    generated_at = local_now().strftime("%Y-%m-%d %H:%M")
+    generated_at = format_local_datetime(local_now(), "datetime", preferences)
 
     story = [
-        Paragraph("Restobar", title_style),
+        Paragraph(business_name, title_style),
         Paragraph("Reporte ejecutivo", title_style),
         Paragraph(
             f"Período analizado: {start_date.isoformat()} al {end_date.isoformat()}",
@@ -622,7 +657,11 @@ def build_pdf_response(filename, start_date, end_date, report):
 
         canvas.setFont("Helvetica-Bold", 9)
         canvas.setFillColor(colors.HexColor("#274b6b"))
-        canvas.drawString(doc.leftMargin, page_height - 20, "RESTOBAR · REPORTE EJECUTIVO")
+        canvas.drawString(
+            doc.leftMargin,
+            page_height - 20,
+            f"{business_name.upper()} - REPORTE EJECUTIVO",
+        )
 
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(colors.HexColor("#64748b"))
@@ -636,7 +675,7 @@ def build_pdf_response(filename, start_date, end_date, report):
         canvas.setFont("Helvetica", 7.8)
         canvas.setFillColor(colors.HexColor("#64748b"))
         canvas.drawString(doc.leftMargin, 11, f"Período: {start_date.isoformat()} a {end_date.isoformat()}")
-        canvas.drawRightString(page_width - doc.rightMargin, 11, "Sistema Restobar")
+        canvas.drawRightString(page_width - doc.rightMargin, 11, f"Sistema {business_name}")
 
         canvas.restoreState()
 
@@ -667,7 +706,7 @@ def normalize_role_code(value):
 def local_datetime_label(value):
     if not value:
         return ""
-    return localize_datetime(value).strftime("%Y-%m-%d %H:%M")
+    return format_local_datetime(value, "datetime")
 
 
 @web_bp.get("/")
@@ -812,6 +851,100 @@ def cambiar_tema():
 
     session["theme"] = next_theme
     return redirect(request.referrer or url_for("web.login"))
+
+
+@web_bp.get("/preferencias")
+@fresh_login_required
+@feature_required("preferencias.view")
+def preferencias():
+    return render_template(
+        "preferences.html",
+        page_title="Preferencias",
+        preferences=get_system_preferences(),
+        choices=system_preference_choices(),
+    )
+
+
+@web_bp.post("/preferencias")
+@fresh_login_required
+@feature_required("preferencias.edit")
+def actualizar_preferencias():
+    current_preferences = get_system_preferences()
+    uploaded_logo, upload_error = save_brand_logo(request.files.get("logo_file"))
+    remove_logo = bool_from_form(request.form.get("remove_logo"))
+    logo_url = (request.form.get("business_logo_url") or "").strip()
+
+    payload = {
+        "business_name": (request.form.get("business_name") or "").strip(),
+        "business_tagline": (request.form.get("business_tagline") or "").strip(),
+        "business_logo_url": current_preferences.get("business_logo_url", ""),
+        "timezone": (request.form.get("timezone") or "").strip(),
+        "date_format": (request.form.get("date_format") or "").strip(),
+        "time_format": (request.form.get("time_format") or "").strip(),
+        "sidebar_clock": (request.form.get("sidebar_clock") or "").strip(),
+        "default_theme": (request.form.get("default_theme") or "").strip(),
+        "ticket_footer": (request.form.get("ticket_footer") or "").strip(),
+    }
+
+    if logo_url:
+        payload["business_logo_url"] = logo_url
+    if uploaded_logo:
+        payload["business_logo_url"] = uploaded_logo
+    if remove_logo:
+        payload["business_logo_url"] = ""
+
+    choices = system_preference_choices()
+    valid_date_formats = {choice["value"] for choice in choices["date_formats"]}
+    valid_time_formats = {choice["value"] for choice in choices["time_formats"]}
+    valid_sidebar_clocks = {choice["value"] for choice in choices["sidebar_clocks"]}
+    valid_themes = {choice["value"] for choice in choices["themes"]}
+
+    errors = []
+    if upload_error:
+        errors.append(upload_error)
+    if not payload["business_name"]:
+        errors.append("El nombre del negocio es obligatorio.")
+    if logo_url and not valid_image_reference(logo_url):
+        errors.append("La URL del logo debe iniciar con http://, https:// o /static/.")
+    if payload["timezone"] and not valid_timezone_name(payload["timezone"]):
+        errors.append("La zona horaria seleccionada no es valida.")
+    if payload["date_format"] not in valid_date_formats:
+        errors.append("Selecciona un formato de fecha valido.")
+    if payload["time_format"] not in valid_time_formats:
+        errors.append("Selecciona un formato de hora valido.")
+    if payload["sidebar_clock"] not in valid_sidebar_clocks:
+        errors.append("Selecciona que debe mostrar el reloj del menu.")
+    if payload["default_theme"] not in valid_themes:
+        errors.append("Selecciona un tema inicial valido.")
+
+    if errors:
+        if uploaded_logo:
+            delete_uploaded_brand_logo(uploaded_logo)
+        flash_form_errors(errors)
+        return redirect(url_for("web.preferencias"))
+
+    if remove_logo and uploaded_logo:
+        delete_uploaded_brand_logo(uploaded_logo)
+
+    old_logo = current_preferences.get("business_logo_url")
+    saved_preferences = save_system_preferences(payload)
+    if old_logo and old_logo != saved_preferences["business_logo_url"] and old_logo.startswith(
+        "/static/uploads/branding/"
+    ):
+        delete_uploaded_brand_logo(old_logo)
+
+    session["theme"] = saved_preferences["default_theme"]
+    audit_event(
+        "actualizar",
+        "preferencias",
+        "sistema",
+        "Se actualizaron las preferencias generales del sistema.",
+        {"preferencias": saved_preferences},
+    )
+    db.session.commit()
+
+    flash("Preferencias guardadas correctamente.", "success")
+    return redirect(url_for("web.preferencias"))
 
 
 @web_bp.get("/dashboard")

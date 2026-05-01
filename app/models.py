@@ -115,6 +115,19 @@ class Rol(db.Model):
         }
 
 
+class PreferenciaSistema(db.Model):
+    __tablename__ = "preferencias_sistema"
+
+    clave = db.Column(db.String(80), primary_key=True)
+    valor = db.Column(db.Text)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+
+    def to_dict(self):
+        return {"clave": self.clave, "valor": self.valor}
+
+
 class AuditLog(db.Model):
     __tablename__ = "audit_logs"
 
