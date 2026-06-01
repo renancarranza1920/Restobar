@@ -899,6 +899,55 @@ def login():
         page_title="Confirmar sesion" if reauth else "Iniciar sesion",
         reauth=reauth,
         next_url=request.args.get("next", ""),
+        nickname_value="",
+    )
+
+
+@web_bp.get("/recuperar-contrasena")
+def recuperar_contrasena():
+    if current_user.is_authenticated and login_fresh():
+        return redirect(url_for("web.mi_seguridad"))
+    return render_template(
+        "password_recovery.html",
+        page_title="Recuperar contrasena",
+        nickname_value="",
+        submitted=False,
+    )
+
+
+@web_bp.post("/recuperar-contrasena")
+def recuperar_contrasena_submit():
+    if current_user.is_authenticated and login_fresh():
+        return redirect(url_for("web.mi_seguridad"))
+
+    nickname = (request.form.get("nickname") or "").strip()
+    if not nickname:
+        flash("Escribe tu nombre de usuario para solicitar ayuda.", "error")
+        return render_template(
+            "password_recovery.html",
+            page_title="Recuperar contrasena",
+            nickname_value=nickname,
+            submitted=False,
+        ), 400
+
+    user = get_user_by_nickname(nickname)
+    audit_event(
+        "solicitar_reset_password",
+        "usuario",
+        user.id if user else None,
+        f"Solicitud de restablecimiento de contrasena para {nickname}.",
+        {
+            "nickname": nickname,
+            "usuario_encontrado": bool(user),
+            "usuario_activo": bool(user and user.activo),
+        },
+        commit=True,
+    )
+    return render_template(
+        "password_recovery.html",
+        page_title="Recuperar contrasena",
+        nickname_value=nickname,
+        submitted=True,
     )
 
 
@@ -921,6 +970,7 @@ def login_submit():
                 page_title="Confirmar sesion",
                 reauth=True,
                 next_url=request.form.get("next", ""),
+                nickname_value=nickname or current_user.nickname,
             ), 401
     else:
         user = get_user_by_nickname(nickname)
@@ -932,6 +982,7 @@ def login_submit():
             page_title="Confirmar sesion" if reauth else "Iniciar sesion",
             reauth=reauth,
             next_url=request.form.get("next", ""),
+            nickname_value=current_user.nickname if reauth else nickname,
         ), 401
 
     if user.uses_legacy_plaintext_password:
@@ -977,9 +1028,10 @@ def actualizar_mi_password():
     current_password = request.form.get("current_password") or ""
     new_password = request.form.get("new_password") or ""
     confirm_password = request.form.get("confirm_password") or ""
+    requires_current_password = not current_user.must_change_password
 
     errors = []
-    if not current_user.check_password(current_password):
+    if requires_current_password and not current_user.check_password(current_password):
         errors.append("Tu contrasena actual no coincide.")
     if len(new_password) < 6:
         errors.append("La nueva contrasena debe tener al menos 6 caracteres.")
@@ -999,7 +1051,7 @@ def actualizar_mi_password():
     return redirect(url_for(default_endpoint_for_user(current_user)))
 
 
-@web_bp.post("/logout")
+@web_bp.route("/logout", methods=["GET", "POST"])
 @login_required
 def logout():
     logout_user()

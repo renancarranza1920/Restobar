@@ -1,67 +1,161 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="module-shell module-narrow">
-    <section class="module-bar">
+<section class="user-form-page">
+    <section class="user-form-hero">
         <div>
-            <p class="eyebrow">Seguridad</p>
+            <p class="user-form-eyebrow">
+                <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                Seguridad
+            </p>
             <h1>{{ 'Editar usuario' if user else 'Nuevo usuario' }}</h1>
-            <p class="muted-copy">Cada persona entra solo al modulo que le toca segun su rol.</p>
+            <p>Configura identidad, rol y acceso del personal en una sola pantalla.</p>
         </div>
-        <div class="action-grid">
-            <a class="button button-ghost" href="{{ url_for('web.usuarios') }}">Volver al listado</a>
-        </div>
+
+        <a class="button button-ghost user-form-back" href="{{ url_for('web.usuarios') }}">
+            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+            Volver al listado
+        </a>
     </section>
 
-    <section class="panel">
-        <form class="form-stack" method="post" action="{{ url_for('web.actualizar_usuario', user_id=user.id) if user else url_for('web.crear_usuario') }}">
-            <label for="nickname">Nickname</label>
-            <input id="nickname" name="nickname" value="{{ user.nickname if user else '' }}" required>
+    <section class="panel user-form-panel">
+        {% set can_reset_password = not user or current_user.id == user.id or user_can(current_user, 'usuarios.reset_password') %}
+        <form class="user-form" method="post" action="{{ url_for('web.actualizar_usuario', user_id=user.id) if user else url_for('web.crear_usuario') }}">
+            <div class="user-form-grid">
+                <div class="user-form-section">
+                    <div class="user-section-head">
+                        <span class="user-section-icon">
+                            <i class="fa-solid fa-id-badge" aria-hidden="true"></i>
+                        </span>
+                        <div>
+                            <h2>Identidad</h2>
+                            <p>Datos visibles para auditoría, órdenes y permisos.</p>
+                        </div>
+                    </div>
 
-            <div class="form-grid two-up">
-                <div>
-                    <label for="nombre">Nombre</label>
-                    <input id="nombre" name="nombre" value="{{ user.nombre if user else '' }}" required>
+                    <div class="user-field">
+                        <label for="nickname">Nombre de usuario</label>
+                        <div class="user-input-shell">
+                            <i class="fa-regular fa-user" aria-hidden="true"></i>
+                            <input id="nickname" name="nickname" value="{{ user.nickname if user else '' }}" required placeholder="Ej. admin">
+                        </div>
+                    </div>
+
+                    <div class="user-inline-fields">
+                        <div class="user-field">
+                            <label for="nombre">Nombre</label>
+                            <div class="user-input-shell">
+                                <i class="fa-regular fa-address-card" aria-hidden="true"></i>
+                                <input id="nombre" name="nombre" value="{{ user.nombre if user else '' }}" required placeholder="Nombre">
+                            </div>
+                        </div>
+
+                        <div class="user-field">
+                            <label for="apellido">Apellido</label>
+                            <div class="user-input-shell">
+                                <i class="fa-regular fa-address-card" aria-hidden="true"></i>
+                                <input id="apellido" name="apellido" value="{{ user.apellido if user else '' }}" required placeholder="Apellido">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="user-field">
+                        <label for="rol">Rol</label>
+                        <div class="user-input-shell">
+                            <i class="fa-solid fa-user-gear" aria-hidden="true"></i>
+                            <select id="rol" name="rol" required>
+                                {% for role in roles %}
+                                    <option value="{{ role.codigo }}" {% if user and user.rol == role.codigo %}selected{% endif %}>
+                                        {{ role.nombre }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <p class="user-field-hint">Los permisos de cada rol se editan desde Usuarios &gt; Roles.</p>
+                    </div>
                 </div>
-                <div>
-                    <label for="apellido">Apellido</label>
-                    <input id="apellido" name="apellido" value="{{ user.apellido if user else '' }}" required>
+
+                <div class="user-form-section">
+                    <div class="user-section-head">
+                        <span class="user-section-icon user-section-icon-accent">
+                            <i class="fa-solid fa-key" aria-hidden="true"></i>
+                        </span>
+                        <div>
+                            <h2>Acceso</h2>
+                            <p>Contraseña inicial, restablecimiento y estado de ingreso.</p>
+                        </div>
+                    </div>
+
+                    <div class="password-reset-panel user-password-panel">
+                        <div class="password-reset-head">
+                            <div class="password-reset-icon" aria-hidden="true">
+                                <i class="fa-solid fa-key"></i>
+                            </div>
+                            <div>
+                                <strong>{{ 'Restablecer contraseña' if user else 'Contraseña inicial' }}</strong>
+                                <p>
+                                    {{ 'Escribe una contraseña temporal cuando el usuario no recuerde la suya.' if user else 'Esta será la primera contraseña del usuario.' }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <label for="password">{{ 'Contraseña temporal' if user else 'Contraseña inicial' }}</label>
+                        <div class="user-input-shell">
+                            <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                            <input
+                                id="password"
+                                name="password"
+                                type="password"
+                                minlength="6"
+                                {% if not user %}required{% endif %}
+                                {% if user and not can_reset_password %}disabled{% endif %}
+                                placeholder="{{ 'Dejar en blanco si no se restablece' if user else 'Mínimo 6 caracteres' }}"
+                            >
+                        </div>
+                        {% if user %}
+                            <p class="user-field-hint">Si escribes una contraseña nueva, el usuario deberá cambiarla al iniciar sesión.</p>
+                            {% if not can_reset_password %}
+                                <p class="user-field-hint">Tu rol puede editar datos del usuario, pero no restablecer contraseñas.</p>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+
+                    <div class="user-access-options">
+                        <label class="user-check-card">
+                            <span class="user-check-icon">
+                                <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+                            </span>
+                            <span>
+                                <strong>Usuario activo</strong>
+                                <small>Permite iniciar sesión y operar según su rol.</small>
+                            </span>
+                            <input type="checkbox" name="activo" {% if not user or user.activo %}checked{% endif %}>
+                        </label>
+
+                        <label class="user-check-card">
+                            <span class="user-check-icon">
+                                <i class="fa-solid fa-rotate" aria-hidden="true"></i>
+                            </span>
+                            <span>
+                                <strong>Forzar cambio de contraseña</strong>
+                                <small>Útil para contraseñas temporales o restablecimientos.</small>
+                            </span>
+                            <input type="checkbox" name="must_change_password" {% if user and user.must_change_password %}checked{% endif %}>
+                        </label>
+                    </div>
                 </div>
             </div>
 
-            <div>
-                <label for="rol">Rol</label>
-                <select id="rol" name="rol" required>
-                    {% for role in roles %}
-                        <option value="{{ role.codigo }}" {% if user and user.rol == role.codigo %}selected{% endif %}>
-                            {{ role.nombre }}
-                        </option>
-                    {% endfor %}
-                </select>
-                <p class="text-xs text-muted mt-1">
-                    Puedes cambiar los permisos de cada rol desde Usuarios > Roles.
-                </p>
+            <div class="user-form-footer">
+                <span>
+                    <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                    Las contraseñas se guardan protegidas y no se pueden consultar después.
+                </span>
+                <button class="button button-primary user-submit-button" type="submit">
+                    {{ 'Guardar cambios' if user else 'Crear usuario' }}
+                    <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                </button>
             </div>
-
-            <label for="password">{{ 'Nueva contrasena' if user else 'Contrasena inicial' }}</label>
-            <input id="password" name="password" type="password" minlength="6" {% if not user %}required{% endif %}>
-            {% if user %}
-                <p class="text-xs text-muted mt-1">
-                    Si escribes una contrasena nueva, el usuario debera cambiarla al iniciar sesion.
-                </p>
-            {% endif %}
-
-            <label class="checkbox-inline">
-                <input type="checkbox" name="activo" {% if not user or user.activo %}checked{% endif %}>
-                <span>Usuario activo</span>
-            </label>
-
-            <label class="checkbox-inline">
-                <input type="checkbox" name="must_change_password" {% if user and user.must_change_password %}checked{% endif %}>
-                <span>Forzar cambio de contrasena al proximo ingreso</span>
-            </label>
-
-            <button class="button button-primary button-full" type="submit">{{ 'Guardar cambios' if user else 'Crear usuario' }}</button>
         </form>
     </section>
 </section>

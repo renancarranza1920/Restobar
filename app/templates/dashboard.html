@@ -14,9 +14,11 @@
                     <p class="welcome-subtitle text-muted text-sm">Resumen operativo de hoy</p>
                 </div>
             </div>
-            <a href="{{ url_for('web.logout') }}" class="button button-ghost button-small text-danger logout-btn hover-lift">
-                <i class="fa-solid fa-arrow-right-from-bracket"></i> Salir
-            </a>
+            <form class="welcome-logout-form" method="post" action="{{ url_for('web.logout') }}">
+                <button class="button button-ghost button-small text-danger logout-btn hover-lift" type="submit">
+                    <i class="fa-solid fa-arrow-right-from-bracket"></i> Salir
+                </button>
+            </form>
         </article>
     </section>
 
