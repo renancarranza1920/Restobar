@@ -2467,6 +2467,10 @@ def detalle_orden(order_id):
         can_prepare=user_can(current_user, "cocina"),
         can_deliver=user_can(current_user, "ordenes"),
         division_locked=any(division.pagada for division in order.divisiones),
+        payment_drawer_open=(
+            bool_from_form(request.args.get("split"))
+            or bool_from_form(request.args.get("cobro"))
+        ),
     )
 
 
