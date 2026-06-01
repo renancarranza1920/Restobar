@@ -1,76 +1,91 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="login-shell">
-    <article class="login-card">
-        <div class="login-brand">
-            <div class="login-mark {{ 'has-image' if business_logo_url else '' }}">
-                {% if business_logo_url %}
-                    <img src="{{ business_logo_url }}" alt="{{ app_name }} logo">
-                {% else %}
-                    {{ business_initial | default('R') }}
-                {% endif %}
+<section class="login-shell login-shell-modern">
+    <article class="login-card login-card-modern">
+        <div class="login-showcase">
+            <div class="login-brand">
+                <div class="login-mark {{ 'has-image' if business_logo_url else '' }}">
+                    {% if business_logo_url %}
+                        <img src="{{ business_logo_url }}" alt="{{ app_name }} logo">
+                    {% else %}
+                        {{ business_initial | default('R') }}
+                    {% endif %}
+                </div>
+                <div class="brand-details">
+                    <strong>{{ app_name | default('Restobar') }}</strong>
+                    <span>{{ business_tagline | default('Operación clara para tu restaurante') }}</span>
+                </div>
             </div>
-            <div class="brand-details">
-                <strong>{{ app_name | default('Restobar') }}</strong>
-                <span>{{ business_tagline | default('Operacion clara para tu restaurante') }}</span>
+
+            <div class="login-copy">
+                <span class="login-kicker">{{ 'Sesión protegida' if reauth else 'Acceso del equipo' }}</span>
+                <h1>{{ 'Confirma tu sesión' if reauth else 'Bienvenido de vuelta' }}</h1>
+            </div>
+
+            <div class="login-signal" aria-hidden="true">
+                <div class="login-signal-line is-active"></div>
+                <div class="login-signal-line"></div>
+                <div class="login-signal-line is-short"></div>
             </div>
         </div>
 
-        <div class="login-copy text-center">
-            <h1>{{ 'Confirmar sesión' if reauth else 'Entre a su cuenta' }}</h1>
-        </div>
-
-        <div class="form-box">
-            
-            {% if not reauth %}
-            <div class="login-tabs">
-                <button type="button" class="tab-btn">
-                    <i class="fa-regular fa-envelope"></i> Correo Electrónico
-                </button>
-                <button type="button" class="tab-btn active">
-                    <i class="fa-regular fa-user"></i> Nombre de Usuario
-                </button>
+        <div class="login-panel">
+            <div class="login-panel-head">
+                <span class="login-access-badge">
+                    <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
+                    Usuario
+                </span>
+                <h2>{{ 'Confirmar acceso' if reauth else 'Entrar a Restobar' }}</h2>
             </div>
-            {% endif %}
 
-            <form class="form-stack login-form" method="post" action="{{ url_for('web.login_submit') }}">
+            <form class="form-stack login-form login-form-modern" method="post" action="{{ url_for('web.login_submit') }}">
                 <input type="hidden" name="next" value="{{ next_url or '' }}">
 
-                <div class="input-group">
+                <div class="input-group login-field">
                     <label for="nickname">
                         Nombre de usuario <span class="text-danger">*</span>
                     </label>
-                    <input id="nickname" name="nickname" autocomplete="username" value="{{ current_user.nickname if reauth else '' }}" {% if reauth %}readonly{% endif %} required placeholder="Ej. admin">
+                    <div class="login-field-shell">
+                        <i class="fa-regular fa-user login-field-icon" aria-hidden="true"></i>
+                        <input
+                            id="nickname"
+                            name="nickname"
+                            autocomplete="username"
+                            value="{{ current_user.nickname if reauth else (nickname_value | default('', true)) }}"
+                            {% if reauth %}readonly{% endif %}
+                            required
+                            placeholder="admin"
+                        >
+                    </div>
                 </div>
 
-                <div class="input-group">
-                    <div class="label-header">
-                        <label for="password">
-                            Contraseña <span class="text-danger">*</span>
-                        </label>
-                        {% if not reauth %}
-                            <a href="#" class="forgot-link">¿Ha olvidado su contraseña?</a>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="input-with-icon">
-                        <input id="password" type="password" name="password" autocomplete="current-password" required placeholder="••••••••••••">
+                <div class="input-group login-field">
+                    <label for="password">
+                        Contraseña <span class="text-danger">*</span>
+                    </label>
+                    <div class="input-with-icon login-field-shell">
+                        <i class="fa-solid fa-lock login-field-icon" aria-hidden="true"></i>
+                        <input id="password" type="password" name="password" autocomplete="current-password" required placeholder="************">
                         <button type="button" class="btn-icon toggle-password" aria-label="Mostrar contraseña">
                             <i class="fa-regular fa-eye"></i>
                         </button>
                     </div>
                 </div>
 
-                {% if not reauth %}
-                <label class="checkbox-inline mt-3">
-                    <input type="checkbox" name="remember">
-                    <span>Recordarme</span>
-                </label>
-                {% endif %}
+                <div class="login-form-actions">
+                    {% if not reauth %}
+                    <label class="checkbox-inline login-remember">
+                        <input type="checkbox" name="remember">
+                        <span>Recordarme</span>
+                    </label>
+                    <a class="login-help-link" href="{{ url_for('web.recuperar_contrasena') }}">¿Olvidaste tu contraseña?</a>
+                    {% endif %}
+                </div>
 
-                <button class="button button-primary button-full mt-4" type="submit">
-                    {{ 'Confirmar' if reauth else 'Entrar' }}
+                <button class="button button-primary button-full login-submit" type="submit">
+                    <span>{{ 'Confirmar' if reauth else 'Entrar' }}</span>
+                    <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
                 </button>
             </form>
         </div>
