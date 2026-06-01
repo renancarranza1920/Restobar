@@ -1,82 +1,485 @@
-{% extends "base.html" %}
+{% extends "base.html" %} {% block content %}
+<div class="filament-dashboard p-4 md:p-6 flex justify-center">
+  <div class="w-full max-w-4xl">
+    <header class="page-header">
+      <div>
+        <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">
+          Inventario
+        </p>
+        <h1 class="text-2xl font-bold text-gray-800">Nuevo movimiento</h1>
+        <p class="text-sm text-muted mt-1">
+          Compra al por mayor o mueve existencias hacia productos de venta.
+        </p>
+      </div>
+      <div class="page-actions">
+        <a
+          class="button button-ghost hover-lift bg-white shadow-sm border-gray-200"
+          href="{{ url_for('web.inventario') }}"
+        >
+          <i class="fa-solid fa-arrow-left mr-2"></i> Volver
+        </a>
+      </div>
+    </header>
 
-{% block content %}
-<section class="module-shell module-narrow">
-    <section class="module-bar">
-        <div>
-            <p class="eyebrow">Inventario</p>
-            <h1>Nuevo movimiento</h1>
-            <p class="muted-copy">Registra compras, ajustes o ventas manuales desde una pantalla dedicada.</p>
+    <form
+      method="post"
+      action="{{ url_for('web.registrar_movimiento_inventario') }}"
+      data-inventory-form
+    >
+      <article class="panel shadow-md">
+        <div class="panel-header border-b bg-gray-50">
+          <div>
+            <h2 class="panel-title font-bold">
+              <i class="fa-solid fa-boxes-stacked mr-2 text-muted"></i> Flujo de
+              inventario
+            </h2>
+            <p class="text-sm text-muted mt-1">
+              Primero entra inventario; despues se saca para vender por unidad.
+            </p>
+          </div>
         </div>
-        <div class="action-grid">
-            <a class="button button-ghost" href="{{ url_for('web.inventario') }}">Volver al listado</a>
-        </div>
-    </section>
 
-    <section class="panel">
-        <form class="form-stack" method="post" action="{{ url_for('web.registrar_movimiento_inventario') }}" data-inventory-form>
-            <label for="product_id">Producto</label>
-            <select id="product_id" name="product_id" required data-inventory-product>
-                {% for product in products %}
-                    <option
-                        value="{{ product.id }}"
-                        data-package-units="{{ product.unidades_por_paquete }}"
-                        data-sale-price="{{ product.precio_venta }}"
-                        data-cost-price="{{ product.precio_costo }}"
-                        data-purchase-unit="{{ product.unidad_compra }}"
-                    >
-                        {{ product.nombre }}
+        <div class="panel-body p-6">
+          <input
+            type="hidden"
+            id="movement_type"
+            name="movement_type"
+            value="compra"
+            data-inventory-type
+          />
+
+          <div class="inventory-mode-switch mb-6" data-inventory-mode-switch>
+            <button
+              class="inventory-mode-button is-active"
+              type="button"
+              data-inventory-mode-button="compra"
+            >
+              <i class="fa-solid fa-truck-ramp-box"></i>
+              <span>
+                <strong>Compra</strong>
+                <small>Entrada de cajas, paquetes o unidades compradas.</small>
+              </span>
+            </button>
+            <button
+              class="inventory-mode-button"
+              type="button"
+              data-inventory-mode-button="salida"
+              {%
+              if
+              not
+              products
+              %}disabled{%
+              endif
+              %}
+            >
+              <i class="fa-solid fa-right-left"></i>
+              <span>
+                <strong>Sacar de inventario</strong>
+                <small
+                  >Convierte inventario en stock de producto de venta.</small
+                >
+              </span>
+            </button>
+          </div>
+
+          {% if not products %}
+          <div
+            class="inline-alert inline-alert-info mb-6"
+            data-empty-inventory-note
+          >
+            <i class="fa-solid fa-circle-info mr-2"></i>
+            <span
+              >Primero registra una compra para poder sacar productos hacia
+              venta.</span
+            >
+          </div>
+          {% endif %}
+
+          <section class="inventory-form-section">
+            <div class="inventory-section-head">
+              <i class="fa-solid fa-warehouse text-primary"></i>
+              <div>
+                <h3>Producto de inventario</h3>
+                <p>
+                  Este registro no aparece directamente en el catalogo de venta.
+                </p>
+              </div>
+            </div>
+
+            <div class="form-grid two-up">
+              <input
+                type="hidden"
+                name="product_id"
+                value="new"
+                data-new-inventory-product-id
+              />
+
+              <div data-existing-inventory-field>
+                <label
+                  for="product_id"
+                  class="block text-sm font-bold text-gray-800 mb-2"
+                  >Producto</label
+                >
+                <select
+                  id="product_id"
+                  name="product_id"
+                  required
+                  data-inventory-product
+                  disabled
+                >
+                  {% for product in products %}
+                  <option
+                    value="{{ product.id }}"
+                    data-package-units="{{ product.unidades_por_paquete }}"
+                    data-stock="{{ product.stock_actual }}"
+                    data-cost-price="{{ product.precio_costo }}"
+                    data-purchase-unit="{{ product.unidad_compra }}"
+                    data-name="{{ product.nombre }}"
+                  >
+                    {{ product.nombre }} - {{ product.stock_actual }} unidades
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div data-purchase-unit-wrap>
+                <label
+                  for="purchase_unit"
+                  class="block text-sm font-bold text-gray-800 mb-2"
+                  >Unidad de compra</label
+                >
+                <input
+                  id="purchase_unit"
+                  name="purchase_unit"
+                  placeholder="Ej. Caja"
+                  data-inventory-purchase-unit
+                />
+              </div>
+            </div>
+
+            <div class="form-grid two-up mt-5" data-new-inventory-fields>
+              <div>
+                <label
+                  for="inventory_name"
+                  class="block text-sm font-bold text-gray-800 mb-2"
+                  >Nombre en inventario</label
+                >
+                <input
+                  id="inventory_name"
+                  name="inventory_name"
+                  placeholder="Ej. Gaseosa lata"
+                />
+              </div>
+
+              <div>
+                <label
+                  for="inventory_category_id"
+                  class="block text-sm font-bold text-gray-800 mb-2"
+                  >Categoria</label
+                >
+                <div class="inventory-category-picker">
+                  <select
+                    id="inventory_category_id"
+                    name="inventory_category_id"
+                    required
+                    data-inventory-category
+                    {%
+                    if
+                    not
+                    categories
+                    %}disabled{%
+                    endif
+                    %}
+                  >
+                    <option value="" disabled selected>
+                      {{ 'Selecciona una categoria...' if categories else 'No
+                      hay categorias disponibles' }}
                     </option>
-                {% endfor %}
-            </select>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}">
+                      {{ category.nombre }}
+                    </option>
+                    {% endfor %}
+                  </select>
+                  {% if user_can(current_user, 'categorias.create') %}
+                  <button
+                    class="button button-secondary"
+                    type="button"
+                    data-inventory-category-open
+                  >
+                    <i class="fa-solid fa-plus mr-2"></i> Nueva categoria
+                  </button>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </section>
 
-            <label for="movement_type">Tipo</label>
-            <select id="movement_type" name="movement_type" data-inventory-type>
-                <option value="compra">Compra</option>
-                <option value="ajuste">Ajuste</option>
-                <option value="venta">Venta manual</option>
-            </select>
+          <section class="inventory-form-section mt-6">
+            <div class="inventory-section-head">
+              <i class="fa-solid fa-calculator text-primary"></i>
+              <div>
+                <h3>Cantidad y costo</h3>
+                <p>
+                  El sistema convierte paquetes y unidades sueltas a stock total
+                  en unidades.
+                </p>
+              </div>
+            </div>
 
             <div class="form-grid two-up" data-inventory-quantity-row>
-                <div>
-                    <label for="packages" data-inventory-packages-label>Paquetes comprados</label>
-                    <input id="packages" name="packages" type="number" min="0" placeholder="Ej. 10" data-inventory-packages>
-                </div>
-                <div>
-                    <label for="package_units">Unidades por paquete</label>
-                    <input id="package_units" name="package_units" type="number" min="1" value="1" data-inventory-package-units>
-                </div>
+              <div>
+                <label
+                  for="packages"
+                  class="block text-sm font-bold text-gray-800 mb-2"
+                  data-inventory-packages-label
+                  >Paquetes comprados</label
+                >
+                <input
+                  id="packages"
+                  name="packages"
+                  type="number"
+                  min="0"
+                  placeholder="Ej. 100"
+                  data-inventory-packages
+                />
+              </div>
+              <div>
+                <label
+                  for="package_units"
+                  class="block text-sm font-bold text-gray-800 mb-2"
+                  >Unidades por paquete</label
+                >
+                <input
+                  id="package_units"
+                  name="package_units"
+                  type="number"
+                  min="1"
+                  value="1"
+                  data-inventory-package-units
+                />
+              </div>
             </div>
 
-            <div class="form-grid two-up" data-inventory-cost-row>
-                <div>
-                    <label for="units" data-inventory-units-label>Unidades sueltas</label>
-                    <input id="units" name="units" type="number" placeholder="Opcional" data-inventory-units>
-                </div>
-                <div>
-                    <label for="unit_price" data-inventory-price-label>Costo por paquete (1 paquete)</label>
-                    <input id="unit_price" name="unit_price" type="number" step="0.01" min="0" placeholder="Ej. 18.00" data-inventory-reference-price>
-                </div>
+            <div class="form-grid two-up mt-5" data-inventory-cost-row>
+              <div>
+                <label
+                  for="units"
+                  class="block text-sm font-bold text-gray-800 mb-2"
+                  data-inventory-units-label
+                  >Unidades sueltas</label
+                >
+                <input
+                  id="units"
+                  name="units"
+                  type="number"
+                  min="0"
+                  placeholder="Opcional"
+                  data-inventory-units
+                />
+              </div>
+              <div data-inventory-cost-group>
+                <label
+                  for="unit_price"
+                  class="block text-sm font-bold text-gray-800 mb-2"
+                  data-inventory-price-label
+                  >Costo por paquete</label
+                >
+                <input
+                  id="unit_price"
+                  name="unit_price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Ej. 18.50"
+                  data-inventory-reference-price
+                />
+              </div>
+            </div>
+          </section>
+
+          <section class="inventory-form-section mt-6" data-sale-target-section>
+            <div class="inventory-section-head">
+              <i class="fa-solid fa-cash-register text-primary"></i>
+              <div>
+                <h3>Producto de venta</h3>
+                <p>
+                  El stock extraido queda disponible para ordenes y se vende al
+                  precio indicado.
+                </p>
+              </div>
             </div>
 
-            <label for="sale_price" data-inventory-sale-price-label>Precio de venta por unidad</label>
-            <input id="sale_price" name="sale_price" type="number" step="0.01" min="0" placeholder="Ej. 1.25" data-inventory-sale-price>
+            <div class="form-grid two-up">
+              <div>
+                <label
+                  for="sale_product_id"
+                  class="block text-sm font-bold text-gray-800 mb-2"
+                  >Destino</label
+                >
+                <select
+                  id="sale_product_id"
+                  name="sale_product_id"
+                  data-sale-product
+                >
+                  <option value="new">Crear producto de venta</option>
+                  {% for product in sale_products %}
+                  <option
+                    value="{{ product.id }}"
+                    data-source-id="{{ product.producto_inventario_id or '' }}"
+                  >
+                    {{ product.nombre }} - stock {{ product.stock_actual }}
+                  </option>
+                  {% endfor %}
+                </select>
+              </div>
 
+              <div data-new-sale-product-fields>
+                <label
+                  for="sale_product_name"
+                  class="block text-sm font-bold text-gray-800 mb-2"
+                  >Nombre de venta</label
+                >
+                <input
+                  id="sale_product_name"
+                  name="sale_product_name"
+                  placeholder="Ej. Gaseosa lata unidad"
+                  data-sale-product-name
+                />
+              </div>
+            </div>
+
+            <div class="mt-5">
+              <label
+                for="sale_price"
+                class="block text-sm font-bold text-gray-800 mb-2"
+                data-inventory-sale-price-label
+                >Precio de venta por unidad</label
+              >
+              <input
+                id="sale_price"
+                name="sale_price"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Ej. 1.25"
+                data-inventory-sale-price
+              />
+            </div>
+          </section>
+
+          <section class="inventory-summary-row mt-6">
             <div class="payment-summary" data-inventory-summary>
-                <span>Unidades a sumar</span>
-                <strong data-inventory-total-units>0</strong>
+              <span>Unidades a sumar</span>
+              <strong data-inventory-total-units>0</strong>
             </div>
 
-            <div class="payment-summary" data-inventory-cash-summary>
-                <span>Egreso de caja</span>
-                <strong data-inventory-cash-total>USD 0.00</strong>
-            </div>
+                        <div class="payment-summary" data-inventory-cash-summary>
+                            <span>Gasto de compra</span>
+                            <strong data-inventory-cash-total>USD 0.00</strong>
+                        </div>
+          </section>
 
-            <label for="notes">Notas</label>
-            <input id="notes" name="notes" placeholder="Opcional">
+          <div class="mt-6">
+            <label
+              for="notes"
+              class="block text-sm font-bold text-gray-800 mb-2"
+              >Notas</label
+            >
+            <input id="notes" name="notes" placeholder="Opcional" />
+          </div>
+        </div>
+      </article>
 
-            <button class="button button-primary button-full" type="submit">Guardar movimiento</button>
+      <div class="form-footer">
+        <span></span>
+        <div class="form-footer-actions">
+          <a href="{{ url_for('web.inventario') }}" class="button button-ghost"
+            >Cancelar</a
+          >
+          <button
+            class="button button-primary shadow-sm hover-lift"
+            type="submit"
+          >
+            <i class="fa-solid fa-save mr-2"></i> Guardar movimiento
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {% if user_can(current_user, 'categorias.create') %}
+    <div
+      class="confirm-modal inventory-category-modal"
+      data-inventory-category-modal
+      hidden
+    >
+      <div class="confirm-dialog shadow-lg">
+        <div class="confirm-dialog-header">
+          <div>
+            <p class="confirm-dialog-kicker">Inventario</p>
+            <h3 class="confirm-dialog-title">Nueva categoria</h3>
+          </div>
+          <button
+            class="confirm-dialog-close"
+            type="button"
+            data-inventory-category-close
+            aria-label="Cerrar"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <form
+          class="form-stack"
+          method="post"
+          action="{{ url_for('web.crear_categoria') }}"
+        >
+          <input
+            type="hidden"
+            name="next"
+            value="{{ url_for('web.nuevo_movimiento_inventario') }}"
+          />
+
+          <div>
+            <label
+              for="modal_category_name"
+              class="block text-sm font-bold text-gray-800 mb-2"
+              >Nombre de la categoria</label
+            >
+            <input
+              id="modal_category_name"
+              name="nombre"
+              maxlength="50"
+              placeholder="Nombre de categoria"
+              required
+              data-inventory-category-name
+            />
+          </div>
+
+          <div class="inline-alert inline-alert-info inline-alert-compact">
+            <i class="fa-solid fa-circle-info mr-2"></i>
+            <span
+              >Se creara como categoria de inventario y no se enviara a
+              cocina.</span
+            >
+          </div>
+
+          <div class="confirm-dialog-actions">
+            <button
+              class="button button-ghost"
+              type="button"
+              data-inventory-category-close
+            >
+              Cancelar
+            </button>
+            <button class="button button-primary" type="submit">
+              <i class="fa-solid fa-save mr-2"></i> Crear categoria
+            </button>
+          </div>
         </form>
-    </section>
-</section>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}
