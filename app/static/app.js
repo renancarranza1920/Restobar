@@ -1161,17 +1161,34 @@
 
     const inventoryForm = document.querySelector("[data-inventory-form]");
     if (inventoryForm) {
+        const newProductInput = inventoryForm.querySelector("[data-new-inventory-product-id]");
         const productSelect = inventoryForm.querySelector("[data-inventory-product]");
         const typeSelect = inventoryForm.querySelector("[data-inventory-type]");
+        const modeButtons = inventoryForm.querySelectorAll("[data-inventory-mode-button]");
+        const existingInventoryField = inventoryForm.querySelector("[data-existing-inventory-field]");
+        const newInventoryFields = inventoryForm.querySelector("[data-new-inventory-fields]");
+        const categoryModal = document.querySelector("[data-inventory-category-modal]");
+        const categoryNameInput = categoryModal?.querySelector("[data-inventory-category-name]");
+        const categoryOpenButtons = inventoryForm.querySelectorAll("[data-inventory-category-open]");
+        const categoryCloseButtons = categoryModal
+            ? categoryModal.querySelectorAll("[data-inventory-category-close]")
+            : [];
+        const purchaseUnitWrap = inventoryForm.querySelector("[data-purchase-unit-wrap]");
+        const purchaseUnitInput = inventoryForm.querySelector("[data-inventory-purchase-unit]");
         const packagesInput = inventoryForm.querySelector("[data-inventory-packages]");
         const packagesLabel = inventoryForm.querySelector("[data-inventory-packages-label]");
         const packageUnitsInput = inventoryForm.querySelector("[data-inventory-package-units]");
         const quantityRow = inventoryForm.querySelector("[data-inventory-quantity-row]");
         const costRow = inventoryForm.querySelector("[data-inventory-cost-row]");
+        const costGroup = inventoryForm.querySelector("[data-inventory-cost-group]");
         const unitsInput = inventoryForm.querySelector("[data-inventory-units]");
         const unitsLabel = inventoryForm.querySelector("[data-inventory-units-label]");
         const priceLabel = inventoryForm.querySelector("[data-inventory-price-label]");
         const referencePriceInput = inventoryForm.querySelector("[data-inventory-reference-price]");
+        const saleTargetSection = inventoryForm.querySelector("[data-sale-target-section]");
+        const saleProductSelect = inventoryForm.querySelector("[data-sale-product]");
+        const newSaleProductFields = inventoryForm.querySelector("[data-new-sale-product-fields]");
+        const saleProductNameInput = inventoryForm.querySelector("[data-sale-product-name]");
         const salePriceInput = inventoryForm.querySelector("[data-inventory-sale-price]");
         const salePriceLabel = inventoryForm.querySelector("[data-inventory-sale-price-label]");
         const inventorySummary = inventoryForm.querySelector("[data-inventory-summary]");
@@ -1190,17 +1207,25 @@
             return productSelect?.selectedOptions?.[0] || null;
         }
 
-        function loadProductDefaults() {
+        function firstExistingInventoryValue() {
+            return Array.from(productSelect?.options || [])
+                .find((option) => option.value && option.value !== "new")?.value || "new";
+        }
+
+        function loadProductDefaults(force = false) {
             const option = selectedProductOption();
             if (!option) {
                 return;
             }
 
-            if (packageUnitsInput) {
+            if (packageUnitsInput && (force || !packageUnitsInput.value || typeSelect?.value === "salida")) {
                 packageUnitsInput.value = option.dataset.packageUnits || "1";
             }
-            if (salePriceInput) {
-                salePriceInput.value = option.dataset.salePrice || "";
+            if (purchaseUnitInput && (force || !purchaseUnitInput.value || productSelect?.value !== "new")) {
+                purchaseUnitInput.value = option.dataset.purchaseUnit || "caja";
+            }
+            if (saleProductNameInput && productSelect?.value !== "new" && (force || !saleProductNameInput.value)) {
+                saleProductNameInput.value = option.dataset.name || "";
             }
         }
 
@@ -1213,141 +1238,109 @@
             section.style.display = visible ? displayValue : "none";
         }
 
+        function setFieldEnabled(field, enabled) {
+            if (field) {
+                field.disabled = !enabled;
+            }
+        }
+
+        function syncSaleProductFields() {
+            const createsSaleProduct = (saleProductSelect?.value || "new") === "new";
+            setSectionVisible(newSaleProductFields, createsSaleProduct, "block");
+            setFieldEnabled(saleProductNameInput, createsSaleProduct);
+        }
+
+        function syncModeButtons() {
+            const movementType = typeSelect?.value || "compra";
+            modeButtons.forEach((button) => {
+                const isActive = button.getAttribute("data-inventory-mode-button") === movementType;
+                button.classList.toggle("is-active", isActive);
+                button.setAttribute("aria-pressed", isActive ? "true" : "false");
+            });
+        }
+
         function syncInventorySummary() {
             const movementType = typeSelect?.value || "compra";
+            const isPurchase = movementType === "compra";
+            const selectedInventoryValue = productSelect?.value || "new";
+
+            if (!isPurchase && (!selectedInventoryValue || selectedInventoryValue === "new") && productSelect) {
+                productSelect.value = firstExistingInventoryValue();
+                loadProductDefaults(true);
+            }
+            if (!isPurchase) {
+                loadProductDefaults();
+            }
+
             const packages = Math.max(Math.trunc(numericValue(packagesInput)), 0);
             const packageUnits = Math.max(Math.trunc(numericValue(packageUnitsInput)), 1);
-            const units = Math.trunc(numericValue(unitsInput));
+            const units = Math.max(Math.trunc(numericValue(unitsInput)), 0);
             const referencePrice = Math.max(numericValue(referencePriceInput), 0);
-            const salePrice = Math.max(numericValue(salePriceInput), 0);
-            const purchaseUnits = (packages * packageUnits) + Math.max(units, 0);
-            const saleUnits = (packages * packageUnits) + Math.abs(units);
-            const totalUnits = movementType === "ajuste"
-                ? 0
-                : (movementType === "venta" ? saleUnits : purchaseUnits);
-            const cashTotal = movementType === "compra"
-                ? (packages * referencePrice) + (Math.max(units, 0) * (referencePrice / packageUnits))
-                : (movementType === "venta" ? saleUnits * salePrice : 0);
+            const totalUnits = (packages * packageUnits) + units;
+            const cashTotal = isPurchase
+                ? (packages * referencePrice) + (units * (referencePrice / packageUnits))
+                : 0;
 
-            if (movementType === "compra") {
-                setSectionVisible(quantityRow, true, "grid");
-                setSectionVisible(costRow, true, "grid");
-                setSectionVisible(inventorySummary, true, "flex");
-                setSectionVisible(cashSummary, true, "flex");
+            setSectionVisible(quantityRow, true, "grid");
+            setSectionVisible(costRow, true, "grid");
+            setSectionVisible(inventorySummary, true, "flex");
+            setSectionVisible(existingInventoryField, !isPurchase, "block");
+            setSectionVisible(newInventoryFields, isPurchase, "grid");
+            setSectionVisible(purchaseUnitWrap, isPurchase, "block");
+            setSectionVisible(costGroup, isPurchase, "block");
+            setSectionVisible(cashSummary, isPurchase, "flex");
+            setSectionVisible(saleTargetSection, !isPurchase, "block");
+
+            setFieldEnabled(newProductInput, isPurchase);
+            setFieldEnabled(productSelect, !isPurchase);
+            setFieldEnabled(referencePriceInput, isPurchase);
+            setFieldEnabled(purchaseUnitInput, isPurchase);
+            setFieldEnabled(saleProductSelect, !isPurchase);
+            setFieldEnabled(salePriceInput, !isPurchase);
+
+            if (newInventoryFields) {
+                newInventoryFields.querySelectorAll("input, select").forEach((field) => {
+                    setFieldEnabled(field, isPurchase);
+                });
+            }
+
+            if (packageUnitsInput) {
+                packageUnitsInput.readOnly = !isPurchase;
+            }
+
+            if (isPurchase) {
                 if (packagesLabel) {
                     packagesLabel.textContent = "Paquetes comprados";
-                }
-                if (packagesInput) {
-                    packagesInput.disabled = false;
-                }
-                if (packageUnitsInput) {
-                    packageUnitsInput.disabled = false;
-                }
-                if (unitsInput) {
-                    unitsInput.disabled = false;
-                    unitsInput.min = "0";
-                }
-                if (referencePriceInput) {
-                    referencePriceInput.disabled = false;
                 }
                 if (unitsLabel) {
                     unitsLabel.textContent = "Unidades sueltas";
                 }
                 if (priceLabel) {
-                    priceLabel.textContent = "Costo por paquete (1 paquete)";
+                    priceLabel.textContent = "Costo por paquete";
                 }
                 if (referencePriceInput) {
-                    referencePriceInput.placeholder = "Ej. 18.00";
-                }
-                if (salePriceLabel) {
-                    salePriceLabel.textContent = "Precio de venta por unidad";
+                    referencePriceInput.placeholder = "Ej. 18.50";
                 }
                 if (summaryLabel) {
                     summaryLabel.textContent = "Unidades a sumar";
                 }
                 if (cashSummaryLabel) {
-                    cashSummaryLabel.textContent = "Egreso de caja";
-                }
-            } else if (movementType === "venta") {
-                setSectionVisible(quantityRow, true, "grid");
-                setSectionVisible(costRow, true, "grid");
-                setSectionVisible(inventorySummary, true, "flex");
-                setSectionVisible(cashSummary, true, "flex");
-                if (packagesLabel) {
-                    packagesLabel.textContent = "Paquetes a vender";
-                }
-                if (packagesInput) {
-                    packagesInput.disabled = false;
-                }
-                if (packageUnitsInput) {
-                    packageUnitsInput.disabled = false;
-                }
-                if (unitsInput) {
-                    unitsInput.disabled = false;
-                    unitsInput.min = "0";
-                }
-                if (referencePriceInput) {
-                    referencePriceInput.disabled = false;
-                }
-                if (unitsLabel) {
-                    unitsLabel.textContent = "Unidades a vender";
-                }
-                if (priceLabel) {
-                    priceLabel.textContent = "Precio de referencia";
-                }
-                if (referencePriceInput) {
-                    referencePriceInput.value = "";
-                    referencePriceInput.placeholder = "No aplica";
-                    referencePriceInput.disabled = true;
-                }
-                if (salePriceLabel) {
-                    salePriceLabel.textContent = "Precio de venta por unidad";
-                }
-                if (summaryLabel) {
-                    summaryLabel.textContent = "Unidades a vender";
-                }
-                if (cashSummaryLabel) {
-                    cashSummaryLabel.textContent = "Ingreso de caja";
+                    cashSummaryLabel.textContent = "Gasto de compra";
                 }
             } else {
-                setSectionVisible(quantityRow, false, "grid");
-                setSectionVisible(costRow, false, "grid");
-                setSectionVisible(inventorySummary, false, "flex");
-                setSectionVisible(cashSummary, false, "flex");
                 if (packagesLabel) {
-                    packagesLabel.textContent = "Paquetes";
-                }
-                if (packagesInput) {
-                    packagesInput.disabled = true;
-                }
-                if (packageUnitsInput) {
-                    packageUnitsInput.disabled = true;
-                }
-                if (unitsInput) {
-                    unitsInput.disabled = true;
-                    unitsInput.value = "";
-                    unitsInput.min = "0";
-                }
-                if (referencePriceInput) {
-                    referencePriceInput.disabled = true;
-                    referencePriceInput.value = "";
-                    referencePriceInput.placeholder = "No aplica";
+                    packagesLabel.textContent = "Paquetes a sacar";
                 }
                 if (unitsLabel) {
-                    unitsLabel.textContent = "Unidades";
-                }
-                if (priceLabel) {
-                    priceLabel.textContent = "Costo";
+                    unitsLabel.textContent = "Unidades a sacar";
                 }
                 if (salePriceLabel) {
                     salePriceLabel.textContent = "Precio de venta por unidad";
                 }
                 if (summaryLabel) {
-                    summaryLabel.textContent = "Movimiento de stock";
+                    summaryLabel.textContent = "Unidades a mover";
                 }
-                if (cashSummaryLabel) {
-                    cashSummaryLabel.textContent = "Caja";
-                }
+                syncSaleProductFields();
             }
 
             if (totalUnitsNode) {
@@ -1356,18 +1349,63 @@
             if (cashTotalNode) {
                 cashTotalNode.textContent = formatMoney(cashTotal);
             }
+
+            syncModeButtons();
+        }
+
+        function openCategoryModal() {
+            if (!categoryModal) {
+                return;
+            }
+            categoryModal.hidden = false;
+            document.body.classList.add("modal-open");
+            window.setTimeout(() => categoryNameInput?.focus(), 0);
+        }
+
+        function closeCategoryModal() {
+            if (!categoryModal) {
+                return;
+            }
+            categoryModal.hidden = true;
+            document.body.classList.remove("modal-open");
         }
 
         productSelect?.addEventListener("change", () => {
-            loadProductDefaults();
+            loadProductDefaults(true);
             syncInventorySummary();
         });
         typeSelect?.addEventListener("change", syncInventorySummary);
+        modeButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                if (button.disabled || !typeSelect) {
+                    return;
+                }
+                typeSelect.value = button.getAttribute("data-inventory-mode-button") || "compra";
+                typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+            });
+        });
+        categoryOpenButtons.forEach((button) => {
+            button.addEventListener("click", openCategoryModal);
+        });
+        categoryCloseButtons.forEach((button) => {
+            button.addEventListener("click", closeCategoryModal);
+        });
+        categoryModal?.addEventListener("click", (event) => {
+            if (event.target === categoryModal) {
+                closeCategoryModal();
+            }
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && categoryModal && !categoryModal.hidden) {
+                closeCategoryModal();
+            }
+        });
+        saleProductSelect?.addEventListener("change", syncSaleProductFields);
         [packagesInput, packageUnitsInput, unitsInput, referencePriceInput, salePriceInput].forEach((input) => {
             input?.addEventListener("input", syncInventorySummary);
         });
 
-        loadProductDefaults();
+        loadProductDefaults(true);
         syncInventorySummary();
     }
 })();

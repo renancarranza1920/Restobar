@@ -107,7 +107,7 @@ FEATURE_DEFINITIONS = [
     {
         "key": "inventario",
         "label": "Inventario",
-        "description": "Ver stock y registrar compras, ventas o ajustes.",
+        "description": "Ver stock y registrar compras o salidas a venta.",
         "group": "Inventario",
     },
     {
@@ -164,7 +164,7 @@ PERMISSION_DEFINITIONS = [
     {"key": "cocina.view", "label": "Ver cocina", "description": "Consultar comandas pendientes.", "group": "Cocina"},
     {"key": "cocina.prepare", "label": "Preparar comandas", "description": "Marcar items de cocina como listos/entregados.", "group": "Cocina"},
     {"key": "inventario.view", "label": "Ver inventario", "description": "Consultar stock y movimientos.", "group": "Inventario"},
-    {"key": "inventario.create", "label": "Registrar movimientos", "description": "Crear compras, ventas y ajustes.", "group": "Inventario"},
+    {"key": "inventario.create", "label": "Registrar movimientos", "description": "Crear compras y salidas a productos de venta.", "group": "Inventario"},
     {"key": "reportes.view", "label": "Ver reporte", "description": "Consultar reporte operativo y financiero.", "group": "Reporte"},
     {"key": "reportes.export", "label": "Exportar reporte", "description": "Descargar PDF.", "group": "Reporte"},
     {"key": "usuarios.view", "label": "Ver usuarios", "description": "Consultar cuentas y roles.", "group": "Seguridad"},
@@ -974,6 +974,41 @@ def bootstrap_table_layout_schema():
             db.session.commit()
 
 
+def bootstrap_inventory_schema():
+    inspector = inspect(db.engine)
+    if inspector.has_table("productos"):
+        product_columns = {column["name"] for column in inspector.get_columns("productos")}
+        if "es_inventario" not in product_columns:
+            db.session.execute(
+                text("ALTER TABLE productos ADD COLUMN es_inventario BOOLEAN DEFAULT FALSE NOT NULL")
+            )
+            db.session.commit()
+        if "producto_inventario_id" not in product_columns:
+            db.session.execute(
+                text("ALTER TABLE productos ADD COLUMN producto_inventario_id INT NULL")
+            )
+            db.session.commit()
+
+    if inspector.has_table("movimientos_inventario"):
+        movement_columns = {
+            column["name"] for column in inspector.get_columns("movimientos_inventario")
+        }
+        if "producto_destino_id" not in movement_columns:
+            db.session.execute(
+                text("ALTER TABLE movimientos_inventario ADD COLUMN producto_destino_id INT NULL")
+            )
+            db.session.commit()
+
+        if db.engine.dialect.name in {"mysql", "mariadb"}:
+            db.session.execute(
+                text(
+                    "ALTER TABLE movimientos_inventario "
+                    "MODIFY COLUMN tipo ENUM('compra','salida','venta','ajuste') NOT NULL"
+                )
+            )
+            db.session.commit()
+
+
 def audit_event(action, entity, entity_id=None, summary=None, details=None, commit=False):
     try:
         user_id = current_user.id if getattr(current_user, "is_authenticated", False) else None
@@ -1110,10 +1145,19 @@ def get_categorias():
     return Categoria.query.order_by(Categoria.nombre.asc()).all()
 
 
+def get_inventory_categories():
+    return (
+        Categoria.query.filter(Categoria.envia_a_cocina.is_(False))
+        .order_by(Categoria.nombre.asc())
+        .all()
+    )
+
+
 def get_productos(disponibles_only=False, search=None):
     query = Producto.query.options(joinedload(Producto.categoria)).order_by(
         Producto.disponible.desc(), Producto.nombre.asc()
     )
+    query = query.filter(Producto.es_inventario.is_(False))
     if disponibles_only:
         query = query.filter_by(disponible=True)
     if search:
@@ -1128,6 +1172,19 @@ def get_inventory_products():
     return (
         Producto.query.options(joinedload(Producto.categoria))
         .join(Producto.categoria)
+        .filter(Producto.es_inventario.is_(True))
+        .filter(Producto.maneja_stock.is_(True))
+        .filter(Categoria.envia_a_cocina.is_(False))
+        .order_by(Producto.nombre.asc())
+        .all()
+    )
+
+
+def get_inventory_sale_products():
+    return (
+        Producto.query.options(joinedload(Producto.categoria))
+        .join(Producto.categoria)
+        .filter(Producto.es_inventario.is_(False))
         .filter(Producto.maneja_stock.is_(True))
         .filter(Categoria.envia_a_cocina.is_(False))
         .order_by(Producto.nombre.asc())
@@ -1147,6 +1204,7 @@ def get_low_stock_products(limit=6):
     return (
         Producto.query.options(joinedload(Producto.categoria))
         .join(Producto.categoria)
+        .filter(Producto.es_inventario.is_(False))
         .filter(Producto.maneja_stock.is_(True))
         .filter(Categoria.envia_a_cocina.is_(False))
         .filter(Producto.stock_actual <= LOW_STOCK_THRESHOLD)
@@ -1391,6 +1449,7 @@ def get_inventory_for_range(start_date, end_date):
     return (
         MovimientoInventario.query.options(
             joinedload(MovimientoInventario.producto),
+            joinedload(MovimientoInventario.producto_destino),
             joinedload(MovimientoInventario.usuario),
         )
         .filter(MovimientoInventario.created_at >= start_utc)
@@ -1732,6 +1791,7 @@ def recent_inventory_movements(limit=20):
     return (
         MovimientoInventario.query.options(
             joinedload(MovimientoInventario.producto),
+            joinedload(MovimientoInventario.producto_destino),
             joinedload(MovimientoInventario.usuario),
         )
         .order_by(MovimientoInventario.created_at.desc())

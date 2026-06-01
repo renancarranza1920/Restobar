@@ -10,6 +10,7 @@ from .services import (
     bootstrap_roles_permissions,
     bootstrap_security_schema,
     bootstrap_system_preferences,
+    bootstrap_inventory_schema,
     bootstrap_table_layout_schema,
     bootstrap_takeout_table,
     bootstrap_waitlist_schema,
@@ -51,6 +52,7 @@ def create_app():
         bootstrap_system_preferences()
         bootstrap_waitlist_schema()
         bootstrap_table_layout_schema()
+        bootstrap_inventory_schema()
         bootstrap_roles_permissions()
         bootstrap_admin_account()
         bootstrap_takeout_table()

@@ -78,7 +78,9 @@ from .services import (
     get_categorias,
     get_dashboard_metrics,
     get_dashboard_snapshot,
+    get_inventory_categories,
     get_inventory_products,
+    get_inventory_sale_products,
     get_low_stock_products,
     get_order,
     get_orders_for_listing,
@@ -100,6 +102,7 @@ from .services import (
     local_today,
     normalize_item_delivery_states,
     normalize_seat_count,
+    next_url_or_default,
     money as normalize_money,
     order_split_capacity,
     order_can_receive_payment,
@@ -509,6 +512,12 @@ def extract_product_payload(existing=None):
         units_per_package = 1
         manages_stock = False
         current_stock = 0
+    elif category:
+        cost_price = existing.precio_costo if existing else parse_decimal("0")
+        purchase_unit = existing.unidad_compra if existing else "unidad"
+        units_per_package = existing.unidades_por_paquete if existing else 1
+        manages_stock = True
+        current_stock = existing.stock_actual if existing else 0
 
     if upload_error:
         errors.append(upload_error)
@@ -538,6 +547,12 @@ def extract_product_payload(existing=None):
         "nombre": name,
         "imagen_url": final_image,
         "categoria_id": category.id if category else None,
+        "producto_inventario_id": (
+            None
+            if category and category.envia_a_cocina
+            else (existing.producto_inventario_id if existing else None)
+        ),
+        "es_inventario": False,
         "precio_costo": cost_price,
         "precio_venta": sale_price,
         "unidad_compra": purchase_unit,
@@ -937,8 +952,6 @@ def login_submit():
             "info",
         )
 
-    from .services import next_url_or_default
-
     default_endpoint = default_endpoint_for_user(user)
     if default_endpoint == "web.login":
         logout_user()
@@ -1250,19 +1263,19 @@ def crear_categoria():
 
     if not nombre:
         flash("La categoria necesita un nombre.", "error")
-        return redirect(url_for("web.nueva_categoria"))
+        return redirect(next_url_or_default("web.nueva_categoria"))
 
     existing = Categoria.query.filter(db.func.lower(Categoria.nombre) == nombre.lower()).first()
     if existing:
         flash("Ya existe una categoria con ese nombre.", "error")
-        return redirect(url_for("web.nueva_categoria"))
+        return redirect(next_url_or_default("web.nueva_categoria"))
 
     category = Categoria(nombre=nombre, envia_a_cocina=envia_a_cocina)
     db.session.add(category)
     audit_event("crear", "categoria", None, f"Se creo la categoria {nombre}.")
     db.session.commit()
     flash(f"Se creo la categoria {category.nombre}.", "success")
-    return redirect(url_for("web.categorias"))
+    return redirect(next_url_or_default("web.categorias"))
 
 
 @web_bp.post("/categorias/<int:category_id>")
@@ -2643,7 +2656,7 @@ def agregar_item_orden(order_id):
                 continue
 
             product = get_producto(product_id)
-            if product is None or not product.disponible:
+            if product is None or product.es_inventario or not product.disponible:
                 flash("Uno de los productos elegidos no esta disponible.", "error")
                 return redirect(url_for("web.detalle_orden", order_id=order.id))
 
@@ -2660,7 +2673,7 @@ def agregar_item_orden(order_id):
         notes = (request.form.get("notes") or "").strip()
 
         product = get_producto(product_id)
-        if product is None or not product.disponible:
+        if product is None or product.es_inventario or not product.disponible:
             flash("El producto elegido no esta disponible.", "error")
             return redirect(url_for("web.detalle_orden", order_id=order.id))
         if quantity <= 0:
@@ -3147,6 +3160,9 @@ def editar_producto(product_id):
     if product is None:
         flash("El producto no existe.", "error")
         return redirect(url_for("web.productos"))
+    if product.es_inventario:
+        flash("Este registro pertenece al inventario mayorista y no al catalogo de venta.", "warning")
+        return redirect(url_for("web.inventario"))
     return render_template(
         "product_form.html",
         page_title=f"Editar {product.nombre}",
@@ -3162,6 +3178,9 @@ def actualizar_producto(product_id):
     if product is None:
         flash("El producto no existe.", "error")
         return redirect(url_for("web.productos"))
+    if product.es_inventario:
+        flash("Este registro pertenece al inventario mayorista y no al catalogo de venta.", "warning")
+        return redirect(url_for("web.inventario"))
 
     previous_image = product.imagen_url
     payload, errors = extract_product_payload(existing=product)
@@ -3190,6 +3209,9 @@ def alternar_disponibilidad_producto(product_id):
     if product is None:
         flash("El producto no existe.", "error")
         return redirect(url_for("web.productos"))
+    if product.es_inventario:
+        flash("Los productos de inventario no se publican en el catalogo de venta.", "warning")
+        return redirect(url_for("web.inventario"))
 
     product.disponible = not product.disponible
     audit_event(
@@ -3216,6 +3238,9 @@ def eliminar_producto(product_id):
     if product is None:
         flash("El producto no existe.", "error")
         return redirect(url_for("web.productos"))
+    if product.es_inventario:
+        flash("Este registro pertenece al inventario mayorista y no al catalogo de venta.", "warning")
+        return redirect(url_for("web.inventario"))
     if product.orden_items:
         flash(
             "No puedes borrar un producto que ya aparece en ordenes registradas.",
@@ -3225,6 +3250,12 @@ def eliminar_producto(product_id):
     if product.movimientos_inventario:
         flash(
             "No puedes borrar un producto que ya tiene movimientos de inventario.",
+            "warning",
+        )
+        return redirect(url_for("web.productos"))
+    if product.movimientos_inventario_destino:
+        flash(
+            "No puedes borrar un producto que recibio salidas de inventario.",
             "warning",
         )
         return redirect(url_for("web.productos"))
@@ -3399,12 +3430,34 @@ def cocina():
 @web_bp.get("/inventario")
 @feature_required("inventario.view")
 def inventario():
+    products = get_inventory_products()
+    movements = recent_inventory_movements()
+    low_inventory_count = sum(
+        1
+        for product in products
+        if product.controla_stock and int(product.stock_actual or 0) <= LOW_STOCK_THRESHOLD
+    )
+    total_units = sum(int(product.stock_actual or 0) for product in products)
+    inventory_cost = normalize_money(
+        sum(
+            Decimal(int(product.stock_actual or 0))
+            * Decimal(str(product.precio_costo or 0))
+            for product in products
+        )
+    )
     return render_template(
         "inventory.html",
         page_title="Inventario",
-        products=get_inventory_products(),
-        movements=recent_inventory_movements(),
+        products=products,
+        movements=movements,
         low_stock_products=get_low_stock_products(limit=8),
+        inventory_summary={
+            "products_count": len(products),
+            "total_units": total_units,
+            "inventory_cost": inventory_cost,
+            "low_inventory_count": low_inventory_count,
+            "movements_count": len(movements),
+        },
     )
 
 
@@ -3415,13 +3468,16 @@ def nuevo_movimiento_inventario():
         "inventory_form.html",
         page_title="Nuevo movimiento de inventario",
         products=get_inventory_products(),
+        sale_products=get_inventory_sale_products(),
+        categories=get_inventory_categories(),
     )
 
 
 @web_bp.post("/inventario")
 @feature_required("inventario.create")
 def registrar_movimiento_inventario():
-    product_id = parse_int(request.form.get("product_id"))
+    raw_product_id = (request.form.get("product_id") or "").strip()
+    product_id = parse_int(raw_product_id)
     movement_type = request.form.get("movement_type")
     packages_count = parse_int(request.form.get("packages"), default=0)
     units = parse_int(request.form.get("units"), default=0)
@@ -3430,156 +3486,211 @@ def registrar_movimiento_inventario():
     sale_price = parse_decimal(request.form.get("sale_price"), default=None)
     notes = (request.form.get("notes") or "").strip()
 
-    product = db.session.get(Producto, product_id)
-    if product is None:
-        flash("El producto seleccionado no existe.", "error")
-        return redirect(url_for("web.nuevo_movimiento_inventario"))
-    if not product.controla_stock:
-        flash(
-            "Ese producto no maneja inventario directo. Los productos de cocina se controlan por insumos.",
-            "warning",
-        )
-        return redirect(url_for("web.nuevo_movimiento_inventario"))
-    if movement_type not in {"compra", "venta", "ajuste"}:
+    if movement_type not in {"compra", "salida"}:
         flash("El tipo de movimiento no es valido.", "error")
         return redirect(url_for("web.nuevo_movimiento_inventario"))
 
-    cash_movement = None
+    movement_amount = None
 
     if movement_type == "compra":
         if packages_count < 0 or units < 0:
             flash("En una compra, paquetes y unidades no pueden ser negativos.", "error")
             return redirect(url_for("web.nuevo_movimiento_inventario"))
 
-        package_units = max(package_units or product.unidades_por_paquete or 1, 1)
+        is_new_inventory_product = raw_product_id == "new" or product_id <= 0
+        if is_new_inventory_product:
+            product_name = (request.form.get("inventory_name") or "").strip()
+            category_id = parse_int(request.form.get("inventory_category_id"))
+            purchase_unit = (request.form.get("purchase_unit") or "caja").strip() or "caja"
+            category = db.session.get(Categoria, category_id) if category_id else None
+
+            if not product_name:
+                flash("Escribe el nombre del producto de inventario.", "error")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+            if category is not None and category.envia_a_cocina:
+                flash("Selecciona una categoria de inventario que no pase por cocina.", "error")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+            if category is None:
+                flash("Selecciona una categoria. Si no existe, creala desde el boton Nueva categoria.", "error")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+            package_units = max(package_units or 1, 1)
+            product = Producto(
+                nombre=product_name,
+                imagen_url=None,
+                categoria_id=category.id,
+                producto_inventario_id=None,
+                es_inventario=True,
+                precio_costo=parse_decimal("0"),
+                precio_venta=parse_decimal("0"),
+                unidad_compra=purchase_unit,
+                unidades_por_paquete=package_units,
+                stock_actual=0,
+                maneja_stock=True,
+                disponible=False,
+            )
+            db.session.add(product)
+            db.session.flush()
+        else:
+            product = (
+                Producto.query.options(joinedload(Producto.categoria))
+                .filter(Producto.id == product_id)
+                .filter(Producto.es_inventario.is_(True))
+                .with_for_update()
+                .first()
+            )
+            if product is None:
+                flash("El producto de inventario seleccionado no existe.", "error")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+            if not product.controla_stock:
+                flash("Ese producto no maneja inventario mayorista.", "warning")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+            purchase_unit = (request.form.get("purchase_unit") or product.unidad_compra or "caja").strip() or "caja"
+            package_units = max(package_units or product.unidades_por_paquete or 1, 1)
+
         stored_units = (packages_count * package_units) + units
         if stored_units <= 0:
             flash("Ingresa paquetes o unidades para registrar la compra.", "error")
             return redirect(url_for("web.nuevo_movimiento_inventario"))
 
         if reference_price is not None and reference_price > 0:
-            session_open = get_active_cash_session()
-            if session_open is None:
-                flash("Abre caja antes de registrar compras con costo.", "error")
-                return redirect(url_for("web.nuevo_movimiento_inventario"))
-
             unit_cost = normalize_money(reference_price / package_units)
-            purchase_total = normalize_money(
+            movement_amount = normalize_money(
                 (reference_price * packages_count) + (unit_cost * units)
-            )
-            cash_movement = MovimientoCaja(
-                sesion_caja_id=session_open.id,
-                tipo="egreso",
-                concepto=(
-                    f"Compra inventario: {product.nombre} "
-                    f"({packages_count} paquetes, {stored_units} unidades)"
-                ),
-                monto=purchase_total,
             )
 
         product.stock_actual += stored_units
+        product.unidad_compra = purchase_unit
         product.unidades_por_paquete = package_units
 
         if reference_price is not None and reference_price > 0:
             product.precio_costo = unit_cost
-        if sale_price is not None and sale_price > 0:
-            product.precio_venta = sale_price
-    elif movement_type == "venta":
-        if packages_count < 0:
-            flash("Los paquetes no pueden ser negativos.", "error")
+        product.disponible = False
+        product.es_inventario = True
+    else:
+        if packages_count < 0 or units < 0:
+            flash("Los paquetes y unidades a sacar no pueden ser negativos.", "error")
             return redirect(url_for("web.nuevo_movimiento_inventario"))
-        package_units = max(package_units or product.unidades_por_paquete or 1, 1)
-        stored_units = (max(packages_count, 0) * package_units) + abs(units)
+
+        product = (
+            Producto.query.options(joinedload(Producto.categoria))
+            .filter(Producto.id == product_id)
+            .filter(Producto.es_inventario.is_(True))
+            .with_for_update()
+            .first()
+        )
+        if product is None:
+            flash("El producto de inventario seleccionado no existe.", "error")
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
+        if not product.controla_stock:
+            flash("Ese producto no maneja inventario mayorista.", "warning")
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+        package_units = max(product.unidades_por_paquete or 1, 1)
+        stored_units = (packages_count * package_units) + units
         if stored_units <= 0:
-            flash("Ingresa unidades o paquetes para registrar la venta manual.", "error")
+            flash("Ingresa paquetes o unidades para sacar del inventario.", "error")
             return redirect(url_for("web.nuevo_movimiento_inventario"))
         if stored_units > product.stock_actual:
             flash(
-                f"No puedes vender {stored_units} unidades de {product.nombre}; solo hay {product.stock_actual}.",
+                f"No puedes sacar {stored_units} unidades de {product.nombre}; solo hay {product.stock_actual}.",
                 "error",
             )
             return redirect(url_for("web.nuevo_movimiento_inventario"))
 
-        effective_sale_price = (
-            sale_price if sale_price is not None and sale_price > 0 else product.precio_venta
-        )
-        if effective_sale_price is None or effective_sale_price <= 0:
-            flash("Ingresa el precio de venta por unidad para registrar la venta manual.", "error")
-            return redirect(url_for("web.nuevo_movimiento_inventario"))
-
-        session_open = get_active_cash_session()
-        if session_open is None:
-            flash("Abre caja antes de registrar una venta manual.", "error")
-            return redirect(url_for("web.nuevo_movimiento_inventario"))
-
-        sale_total = normalize_money(effective_sale_price * stored_units)
-        cash_movement = MovimientoCaja(
-            sesion_caja_id=session_open.id,
-            tipo="ingreso",
-            concepto=f"Venta manual inventario: {product.nombre} ({stored_units} unidades)",
-            monto=sale_total,
-        )
-        reference_price = effective_sale_price
-        product.stock_actual -= stored_units
-    else:
         if sale_price is None or sale_price <= 0:
-            flash("Ingresa el nuevo precio de venta por unidad.", "error")
+            flash("Ingresa el precio de venta por unidad para el producto final.", "error")
             return redirect(url_for("web.nuevo_movimiento_inventario"))
 
-        product.precio_venta = sale_price
-        stored_units = 0
+        raw_sale_product_id = (request.form.get("sale_product_id") or "new").strip()
+        sale_product_id = parse_int(raw_sale_product_id)
+        if raw_sale_product_id == "new" or sale_product_id <= 0:
+            sale_product_name = (request.form.get("sale_product_name") or product.nombre).strip()
+            if not sale_product_name:
+                flash("Escribe el nombre del producto de venta.", "error")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+            sale_product = Producto(
+                nombre=sale_product_name,
+                imagen_url=product.imagen_url,
+                categoria_id=product.categoria_id,
+                producto_inventario_id=product.id,
+                es_inventario=False,
+                precio_costo=product.precio_costo,
+                precio_venta=sale_price,
+                unidad_compra="unidad",
+                unidades_por_paquete=1,
+                stock_actual=0,
+                maneja_stock=True,
+                disponible=True,
+            )
+            db.session.add(sale_product)
+            db.session.flush()
+        else:
+            sale_product = (
+                Producto.query.options(joinedload(Producto.categoria))
+                .filter(Producto.id == sale_product_id)
+                .filter(Producto.es_inventario.is_(False))
+                .with_for_update()
+                .first()
+            )
+            if sale_product is None:
+                flash("El producto de venta seleccionado no existe.", "error")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+            if sale_product.requiere_cocina:
+                flash("Los productos de cocina no se abastecen desde inventario mayorista.", "warning")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+            if (
+                sale_product.producto_inventario_id
+                and sale_product.producto_inventario_id != product.id
+            ):
+                flash(
+                    "Ese producto de venta ya esta vinculado a otro producto de inventario.",
+                    "error",
+                )
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+            sale_product.producto_inventario_id = product.id
+
+        product.stock_actual -= stored_units
+        sale_product.stock_actual += stored_units
+        sale_product.precio_venta = sale_price
+        sale_product.precio_costo = product.precio_costo
+        sale_product.maneja_stock = True
+        sale_product.disponible = True
         reference_price = sale_price
-        if not notes:
-            notes = f"Ajuste de precio de venta a ${sale_price:.2f}"
 
     movement = MovimientoInventario(
         producto_id=product.id,
         tipo=movement_type,
+        producto_destino_id=sale_product.id if movement_type == "salida" else None,
         cantidad_paquetes=(
-            packages_count if movement_type != "ajuste" and packages_count else None
+            packages_count if packages_count else None
         ),
         cantidad_unidades=stored_units,
-        precio_unitario=reference_price,
+        precio_unitario=movement_amount if movement_type == "compra" else None,
         notas=notes or None,
         usuario_id=current_user.id,
     )
     db.session.add(movement)
-    if cash_movement is not None:
-        db.session.add(cash_movement)
     audit_event(
         "movimiento",
         "inventario",
         product.id,
         f"Movimiento de inventario en {product.nombre}.",
-        {"tipo": movement_type, "unidades": stored_units},
+        {
+            "tipo": movement_type,
+            "unidades": stored_units,
+            "monto_gastado": movement_amount if movement_type == "compra" else None,
+            "producto_destino_id": sale_product.id if movement_type == "salida" else None,
+        },
     )
-    if cash_movement is not None:
-        audit_event(
-            "movimiento",
-            "caja",
-            cash_movement.sesion_caja_id,
-            (
-                f"Egreso automatico por compra de inventario: {product.nombre}."
-                if movement_type == "compra"
-                else f"Ingreso automatico por venta manual: {product.nombre}."
-            ),
-            {"monto": cash_movement.monto, "producto_id": product.id},
-        )
     db.session.commit()
 
-    if movement_type == "compra" and cash_movement is not None:
+    if movement_type == "salida":
         flash(
-            f"Movimiento de inventario registrado y egreso de caja por ${cash_movement.monto:.2f}.",
-            "success",
-        )
-    elif movement_type == "venta" and cash_movement is not None:
-        flash(
-            f"Venta manual registrada e ingreso de caja por ${cash_movement.monto:.2f}.",
-            "success",
-        )
-    elif movement_type == "ajuste":
-        flash(
-            f"Ajuste de {product.nombre} registrado correctamente.",
+            f"Se sacaron {stored_units} unidades de {product.nombre} hacia {sale_product.nombre}.",
             "success",
         )
     else:

@@ -291,6 +291,8 @@ class Producto(db.Model):
     nombre = db.Column(db.String(100), nullable=False)
     imagen_url = db.Column(db.String(255))
     categoria_id = db.Column(db.Integer, db.ForeignKey("categorias.id"), nullable=False)
+    producto_inventario_id = db.Column(db.Integer, db.ForeignKey("productos.id"), nullable=True)
+    es_inventario = db.Column(db.Boolean, default=False, nullable=False)
     precio_costo = db.Column(db.Numeric(10, 2), default=0, nullable=False)
     precio_venta = db.Column(db.Numeric(10, 2), nullable=False)
     unidad_compra = db.Column(db.String(30), default="unidad", nullable=False)
@@ -300,9 +302,25 @@ class Producto(db.Model):
     disponible = db.Column(db.Boolean, default=True, nullable=False)
 
     categoria = db.relationship("Categoria", back_populates="productos", lazy=True)
+    inventario_origen = db.relationship(
+        "Producto",
+        remote_side=[id],
+        backref=db.backref("productos_venta", lazy=True),
+        foreign_keys=[producto_inventario_id],
+        lazy=True,
+    )
     orden_items = db.relationship("OrdenItem", back_populates="producto", lazy=True)
     movimientos_inventario = db.relationship(
-        "MovimientoInventario", back_populates="producto", lazy=True
+        "MovimientoInventario",
+        back_populates="producto",
+        foreign_keys="MovimientoInventario.producto_id",
+        lazy=True,
+    )
+    movimientos_inventario_destino = db.relationship(
+        "MovimientoInventario",
+        back_populates="producto_destino",
+        foreign_keys="MovimientoInventario.producto_destino_id",
+        lazy=True,
     )
 
     @property
@@ -324,6 +342,8 @@ class Producto(db.Model):
             "imagen_url": self.imagen_url,
             "categoria_id": self.categoria_id,
             "categoria": self.categoria.nombre if self.categoria else None,
+            "producto_inventario_id": self.producto_inventario_id,
+            "es_inventario": self.es_inventario,
             "precio_costo": as_float(self.precio_costo),
             "precio_venta": as_float(self.precio_venta),
             "unidad_compra": self.unidad_compra,
@@ -587,8 +607,9 @@ class MovimientoInventario(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     producto_id = db.Column(db.Integer, db.ForeignKey("productos.id"), nullable=False)
+    producto_destino_id = db.Column(db.Integer, db.ForeignKey("productos.id"), nullable=True)
     tipo = db.Column(
-        db.Enum("compra", "venta", "ajuste", name="movimientos_inventario_tipo"),
+        db.Enum("compra", "salida", "venta", "ajuste", name="movimientos_inventario_tipo"),
         nullable=False,
     )
     cantidad_paquetes = db.Column(db.Integer)
@@ -599,7 +620,16 @@ class MovimientoInventario(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     producto = db.relationship(
-        "Producto", back_populates="movimientos_inventario", lazy=True
+        "Producto",
+        back_populates="movimientos_inventario",
+        foreign_keys=[producto_id],
+        lazy=True,
+    )
+    producto_destino = db.relationship(
+        "Producto",
+        back_populates="movimientos_inventario_destino",
+        foreign_keys=[producto_destino_id],
+        lazy=True,
     )
     usuario = db.relationship(
         "Usuario", back_populates="movimientos_inventario", lazy=True

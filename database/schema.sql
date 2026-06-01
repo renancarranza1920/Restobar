@@ -88,6 +88,8 @@ CREATE TABLE productos (
     nombre VARCHAR(100) NOT NULL,
     imagen_url VARCHAR(255) NULL,
     categoria_id INT NOT NULL,
+    producto_inventario_id INT NULL,
+    es_inventario BOOLEAN DEFAULT FALSE NOT NULL,
     precio_costo DECIMAL(10,2) DEFAULT 0.00,
     precio_venta DECIMAL(10,2) NOT NULL,
     unidad_compra VARCHAR(30) DEFAULT 'unidad',
@@ -95,7 +97,8 @@ CREATE TABLE productos (
     stock_actual INT DEFAULT 0,
     maneja_stock BOOLEAN DEFAULT TRUE,
     disponible BOOLEAN DEFAULT TRUE,
-    FOREIGN KEY (categoria_id) REFERENCES categorias(id)
+    FOREIGN KEY (categoria_id) REFERENCES categorias(id),
+    FOREIGN KEY (producto_inventario_id) REFERENCES productos(id)
 );
 
 CREATE TABLE sesiones_caja (
@@ -172,7 +175,8 @@ CREATE TABLE pagos (
 CREATE TABLE movimientos_inventario (
     id INT AUTO_INCREMENT PRIMARY KEY,
     producto_id INT NOT NULL,
-    tipo ENUM('compra', 'venta', 'ajuste') NOT NULL,
+    producto_destino_id INT NULL,
+    tipo ENUM('compra', 'salida', 'venta', 'ajuste') NOT NULL,
     cantidad_paquetes INT NULL,
     cantidad_unidades INT NOT NULL,
     precio_unitario DECIMAL(10,2),
@@ -180,6 +184,7 @@ CREATE TABLE movimientos_inventario (
     usuario_id INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (producto_id) REFERENCES productos(id),
+    FOREIGN KEY (producto_destino_id) REFERENCES productos(id),
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
 
