@@ -1,6 +1,6 @@
 {% extends "base.html" %} {% block content %}
-<div class="filament-dashboard p-4 md:p-6 flex justify-center">
-  <div class="w-full max-w-4xl">
+<div class="inventory-form-workspace">
+  <div class="inventory-form-shell">
     <header class="page-header">
       <div>
         <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">
@@ -44,13 +44,13 @@
             type="hidden"
             id="movement_type"
             name="movement_type"
-            value="compra"
+            value="{{ movement_mode|default('compra') }}"
             data-inventory-type
           />
 
           <div class="inventory-mode-switch mb-6" data-inventory-mode-switch>
             <button
-              class="inventory-mode-button is-active"
+              class="inventory-mode-button {{ 'is-active' if movement_mode|default('compra') == 'compra' else '' }}"
               type="button"
               data-inventory-mode-button="compra"
             >
@@ -61,7 +61,7 @@
               </span>
             </button>
             <button
-              class="inventory-mode-button"
+              class="inventory-mode-button {{ 'is-active' if movement_mode|default('compra') == 'salida' else '' }}"
               type="button"
               data-inventory-mode-button="salida"
               {%
@@ -107,13 +107,6 @@
             </div>
 
             <div class="form-grid two-up">
-              <input
-                type="hidden"
-                name="product_id"
-                value="new"
-                data-new-inventory-product-id
-              />
-
               <div data-existing-inventory-field>
                 <label
                   for="product_id"
@@ -125,8 +118,10 @@
                   name="product_id"
                   required
                   data-inventory-product
-                  disabled
                 >
+                  <option value="new" data-package-units="1" data-stock="0" data-cost-price="0" data-purchase-unit="caja" data-name="">
+                    Registrar producto nuevo en bodega
+                  </option>
                   {% for product in products %}
                   <option
                     value="{{ product.id }}"
@@ -135,11 +130,15 @@
                     data-cost-price="{{ product.precio_costo }}"
                     data-purchase-unit="{{ product.unidad_compra }}"
                     data-name="{{ product.nombre }}"
+                    {% if selected_product_id == product.id %}selected{% endif %}
                   >
-                    {{ product.nombre }} - {{ product.stock_actual }} unidades
+                    {{ product.nombre }} - {{ product.stock_actual }} unidades en bodega
                   </option>
                   {% endfor %}
                 </select>
+                <p class="text-xs text-muted mt-2" data-inventory-product-help>
+                  Para comprar mas stock, selecciona un producto existente. Para crear uno nuevo, usa la primera opcion.
+                </p>
               </div>
 
               <div data-purchase-unit-wrap>

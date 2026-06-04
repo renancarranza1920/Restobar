@@ -81,6 +81,8 @@ from .services import (
     get_inventory_categories,
     get_inventory_products,
     get_inventory_sale_products,
+    inventory_fifo_consumption,
+    inventory_stock_breakdown,
     get_low_stock_products,
     get_order,
     get_orders_for_listing,
@@ -3064,19 +3066,28 @@ def pagar_division(division_id):
         flash("La division no existe.", "error")
         return redirect(url_for("web.ordenes"))
 
+    people_count = max(2, len(division.orden.divisiones) or 2)
+    order_payment_url = url_for(
+        "web.detalle_orden",
+        order_id=division.orden_id,
+        cobro=1,
+        split=1,
+        personas=people_count,
+    )
+
     method = request.form.get("method")
     if method not in {"efectivo", "tarjeta"}:
         flash("El metodo de pago no es valido.", "error")
-        return redirect(url_for("web.detalle_orden", order_id=division.orden_id))
+        return redirect(order_payment_url)
 
     allowed, message = division_can_receive_payment(current_user, division)
     if not allowed:
         flash(message, "error")
-        return redirect(url_for("web.detalle_orden", order_id=division.orden_id))
+        return redirect(order_payment_url)
     stock_errors = order_stock_errors(division.orden)
     if stock_errors:
         flash(stock_errors[0], "error")
-        return redirect(url_for("web.detalle_orden", order_id=division.orden_id))
+        return redirect(order_payment_url)
 
     _tip_percent, tip_amount = payment_tip_context(division.total)
     payment = Pago(orden=division.orden, metodo=method, monto=division.total, propina=tip_amount)
@@ -3123,7 +3134,9 @@ def pagar_division(division_id):
         flash_low_stock_for_order(division.orden)
 
     flash(f"{division.nombre_visible} quedo cobrada.", "success")
-    return redirect(url_for("web.detalle_orden", order_id=division.orden_id))
+    if bool_from_form(request.form.get("ticket_after_payment")):
+        return redirect(url_for("web.ticket_division", division_id=division.id))
+    return redirect(order_payment_url)
 
 
 @web_bp.post("/ordenes/<int:order_id>/pagar")
@@ -3134,43 +3147,52 @@ def pagar_orden(order_id):
         flash("La orden no existe.", "error")
         return redirect(url_for("web.ordenes"))
 
+    people_count = max(2, len(order.divisiones) or 2)
+    order_payment_url = url_for(
+        "web.detalle_orden",
+        order_id=order.id,
+        cobro=1,
+        split=1 if order.divisiones else 0,
+        personas=people_count,
+    )
+
     if order.divisiones:
         if any(division.pagada for division in order.divisiones):
             flash("Esta orden ya tiene cuenta dividida. Cobra por persona o elimina la division antes del primer pago.", "error")
-            return redirect(url_for("web.detalle_orden", order_id=order.id))
+            return redirect(order_payment_url)
         if bool_from_form(request.form.get("clear_split")):
             allowed, message = order_can_receive_payment(current_user, order)
             if not allowed:
                 flash(message, "error")
-                return redirect(url_for("web.detalle_orden", order_id=order.id))
+                return redirect(order_payment_url)
             clear_divisiones(order)
             db.session.flush()
             order = get_order(order.id)
         else:
             flash("Esta orden tiene cuenta dividida. Quita la division o usa el boton para cobrar normal.", "error")
-            return redirect(url_for("web.detalle_orden", order_id=order.id))
+            return redirect(order_payment_url)
 
     allowed, message = order_can_receive_payment(current_user, order)
     if not allowed:
         flash(message, "error")
-        return redirect(url_for("web.detalle_orden", order_id=order.id))
+        return redirect(order_payment_url)
     stock_errors = order_stock_errors(order)
     if stock_errors:
         flash(stock_errors[0], "error")
-        return redirect(url_for("web.detalle_orden", order_id=order.id))
+        return redirect(order_payment_url)
 
     amount = parse_decimal(request.form.get("amount"))
     method = request.form.get("method")
 
     if method not in {"efectivo", "tarjeta"}:
         flash("El metodo de pago no es valido.", "error")
-        return redirect(url_for("web.detalle_orden", order_id=order.id))
+        return redirect(order_payment_url)
     if amount <= 0:
         flash("El monto debe ser mayor que cero.", "error")
-        return redirect(url_for("web.detalle_orden", order_id=order.id))
+        return redirect(order_payment_url)
     if amount > order.saldo_pendiente:
         flash("El monto no puede ser mayor que el saldo pendiente.", "error")
-        return redirect(url_for("web.detalle_orden", order_id=order.id))
+        return redirect(order_payment_url)
 
     _tip_percent, tip_amount = payment_tip_context(amount)
     payment = Pago(orden=order, metodo=method, monto=amount, propina=tip_amount)
@@ -3562,7 +3584,16 @@ def cocina():
 @feature_required("inventario.view")
 def inventario():
     products = get_inventory_products()
+    sale_products = get_inventory_sale_products()
     movements = recent_inventory_movements()
+    inventory_breakdowns = {
+        product.id: inventory_stock_breakdown(product) for product in products
+    }
+    sale_products_by_source = {}
+    for sale_product in sale_products:
+        sale_products_by_source.setdefault(sale_product.producto_inventario_id, []).append(
+            sale_product
+        )
     low_inventory_count = sum(
         1
         for product in products
@@ -3580,7 +3611,10 @@ def inventario():
         "inventory.html",
         page_title="Inventario",
         products=products,
+        sale_products=sale_products,
         movements=movements,
+        inventory_breakdowns=inventory_breakdowns,
+        sale_products_by_source=sale_products_by_source,
         low_stock_products=get_low_stock_products(limit=8),
         inventory_summary={
             "products_count": len(products),
@@ -3588,6 +3622,7 @@ def inventario():
             "inventory_cost": inventory_cost,
             "low_inventory_count": low_inventory_count,
             "movements_count": len(movements),
+            "sale_products_count": len(sale_products),
         },
     )
 
@@ -3595,12 +3630,16 @@ def inventario():
 @web_bp.get("/inventario/nuevo")
 @feature_required("inventario.create")
 def nuevo_movimiento_inventario():
+    movement_mode = request.args.get("mode") if request.args.get("mode") in {"compra", "salida"} else "compra"
+    selected_product_id = parse_int(request.args.get("product_id"), 0)
     return render_template(
         "inventory_form.html",
         page_title="Nuevo movimiento de inventario",
         products=get_inventory_products(),
         sale_products=get_inventory_sale_products(),
         categories=get_inventory_categories(),
+        movement_mode=movement_mode,
+        selected_product_id=selected_product_id,
     )
 
 
@@ -3729,6 +3768,13 @@ def registrar_movimiento_inventario():
                 "error",
             )
             return redirect(url_for("web.nuevo_movimiento_inventario"))
+        fifo_result = inventory_fifo_consumption(product, stored_units)
+        if fifo_result["missing"] > 0:
+            flash(
+                "No hay suficientes lotes de compra disponibles para sacar esa cantidad con PEPS.",
+                "error",
+            )
+            return redirect(url_for("web.nuevo_movimiento_inventario"))
 
         if sale_price is None or sale_price <= 0:
             flash("Ingresa el precio de venta por unidad para el producto final.", "error")
@@ -3787,10 +3833,14 @@ def registrar_movimiento_inventario():
         product.stock_actual -= stored_units
         sale_product.stock_actual += stored_units
         sale_product.precio_venta = sale_price
-        sale_product.precio_costo = product.precio_costo
+        sale_product.precio_costo = fifo_result["average_cost"] or product.precio_costo
         sale_product.maneja_stock = True
         sale_product.disponible = True
         reference_price = sale_price
+        if notes:
+            notes = f"{notes} | PEPS: {fifo_result['units']} uds desde lote mas antiguo."
+        else:
+            notes = f"PEPS: {fifo_result['units']} uds desde lote mas antiguo."
 
     movement = MovimientoInventario(
         producto_id=product.id,

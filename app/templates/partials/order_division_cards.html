@@ -27,16 +27,26 @@
                         </div>
                     {% endfor %}
                 </div>
-                <div class="p-3 bg-gray-50 border-t border-gray-100 flex justify-between items-center gap-2">
+                <div class="p-3 bg-gray-50 border-t border-gray-100 division-card-footer">
                     <strong class="text-lg text-primary">{{ division.total|money }}</strong>
 
                     {% if user_can(current_user, 'caja') and not division.pagada %}
-                        <form class="flex gap-2" method="post" action="{{ url_for('web.pagar_division', division_id=division.id) }}" data-payment-form data-payment-amount="{{ division.total }}" data-payment-label="{{ division.nombre_visible }}">
-                            <select name="method" class="text-xs p-1 rounded border-gray-300 w-20">
-                                <option value="efectivo">Efectivo</option>
-                                <option value="tarjeta">Tarjeta</option>
-                            </select>
-                            <button class="button button-primary button-small px-2 shadow-sm" type="submit" {% if not division.todos_entregados %}disabled{% endif %}>Cobrar</button>
+                        <form class="division-pay-form" method="post" action="{{ url_for('web.pagar_division', division_id=division.id) }}" data-payment-form data-payment-amount="{{ division.total }}" data-payment-label="{{ division.nombre_visible }}">
+                            <label class="division-pay-method">
+                                <span>Metodo</span>
+                                <select name="method">
+                                    <option value="efectivo">Efectivo</option>
+                                    <option value="tarjeta">Tarjeta</option>
+                                </select>
+                            </label>
+                            <label class="division-ticket-toggle">
+                                <input type="checkbox" name="ticket_after_payment" value="1">
+                                <span>Abrir ticket al cobrar</span>
+                            </label>
+                            <button class="button button-primary button-small shadow-sm" type="submit" {% if not division.todos_entregados %}disabled{% endif %}>Cobrar</button>
+                            {% if not division.todos_entregados %}
+                                <p class="division-pay-hint">Entrega o cancela los productos pendientes desde Pedido actual antes de cobrar.</p>
+                            {% endif %}
                         </form>
                     {% elif division.pagada and (user_can(current_user, 'ordenes.ticket') or user_can(current_user, 'caja')) %}
                         <a class="button button-ghost button-small px-2 shadow-sm" href="{{ url_for('web.ticket_division', division_id=division.id) }}" target="_blank">

@@ -1819,6 +1819,123 @@ def recent_inventory_movements(limit=20):
     )
 
 
+def inventory_movement_unit_cost(movement):
+    if not movement or movement.tipo != "compra" or not movement.precio_unitario:
+        return ZERO
+    units = int(movement.cantidad_unidades or 0)
+    if units <= 0:
+        return ZERO
+    return money(as_decimal(movement.precio_unitario) / Decimal(units))
+
+
+def inventory_fifo_layers(product):
+    if not product:
+        return []
+
+    movements = (
+        MovimientoInventario.query.options(joinedload(MovimientoInventario.usuario))
+        .filter(MovimientoInventario.producto_id == product.id)
+        .order_by(MovimientoInventario.created_at.asc(), MovimientoInventario.id.asc())
+        .all()
+    )
+
+    layers = []
+    for movement in movements:
+        quantity = int(movement.cantidad_unidades or 0)
+        if quantity <= 0:
+            continue
+
+        if movement.tipo == "compra":
+            layers.append(
+                {
+                    "movement": movement,
+                    "remaining": quantity,
+                    "unit_cost": inventory_movement_unit_cost(movement),
+                }
+            )
+            continue
+
+        remaining_out = quantity
+        for layer in layers:
+            if remaining_out <= 0:
+                break
+            if layer["remaining"] <= 0:
+                continue
+            consumed = min(layer["remaining"], remaining_out)
+            layer["remaining"] -= consumed
+            remaining_out -= consumed
+
+    available_layers = [layer for layer in layers if layer["remaining"] > 0]
+    actual_stock = max(int(product.stock_actual or 0), 0)
+    calculated_stock = sum(layer["remaining"] for layer in available_layers)
+    if actual_stock and calculated_stock > actual_stock:
+        overflow = calculated_stock - actual_stock
+        for layer in available_layers:
+            if overflow <= 0:
+                break
+            consumed = min(layer["remaining"], overflow)
+            layer["remaining"] -= consumed
+            overflow -= consumed
+        available_layers = [layer for layer in available_layers if layer["remaining"] > 0]
+    return available_layers
+
+
+def inventory_fifo_consumption(product, quantity):
+    remaining = max(int(quantity or 0), 0)
+    consumed_layers = []
+    for layer in inventory_fifo_layers(product):
+        if remaining <= 0:
+            break
+        consumed = min(layer["remaining"], remaining)
+        if consumed <= 0:
+            continue
+        consumed_layers.append(
+            {
+                "movement": layer["movement"],
+                "quantity": consumed,
+                "unit_cost": layer["unit_cost"],
+                "subtotal": money(layer["unit_cost"] * consumed),
+            }
+        )
+        remaining -= consumed
+
+    if remaining > 0 and product and int(product.stock_actual or 0) >= int(quantity or 0):
+        fallback_cost = money(product.precio_costo or ZERO)
+        consumed_layers.append(
+            {
+                "movement": None,
+                "quantity": remaining,
+                "unit_cost": fallback_cost,
+                "subtotal": money(fallback_cost * remaining),
+            }
+        )
+        remaining = 0
+
+    consumed_units = sum(layer["quantity"] for layer in consumed_layers)
+    consumed_cost = money(sum(layer["subtotal"] for layer in consumed_layers))
+    average_cost = money(consumed_cost / consumed_units) if consumed_units else ZERO
+    return {
+        "layers": consumed_layers,
+        "missing": remaining,
+        "units": consumed_units,
+        "cost": consumed_cost,
+        "average_cost": average_cost,
+    }
+
+
+def inventory_stock_breakdown(product):
+    units_per_package = max(int(product.unidades_por_paquete or 1), 1)
+    total_units = max(int(product.stock_actual or 0), 0)
+    return {
+        "packages": total_units // units_per_package,
+        "loose_units": total_units % units_per_package,
+        "total_units": total_units,
+        "units_per_package": units_per_package,
+        "unit_label": product.unidad_compra or "paquete",
+        "layers": inventory_fifo_layers(product),
+    }
+
+
 def recent_cash_movements(limit=15, session_id=None):
     query = MovimientoCaja.query.order_by(MovimientoCaja.created_at.desc())
     if session_id is not None:
@@ -2149,6 +2266,39 @@ def item_can_be_delivered(user, item):
     return item.requiere_cocina and item.estado == "listo" and user_can(user, "ordenes.deliver")
 
 
+def payment_pending_delivery_message(items, context="orden"):
+    pending_names = []
+    seen = set()
+    for item in items:
+        if not item or item.estado == "entregado":
+            continue
+        product_name = item.producto.nombre if item.producto else f"Item #{item.id}"
+        if product_name in seen:
+            continue
+        seen.add(product_name)
+        pending_names.append(product_name)
+
+    if not pending_names:
+        return "Hay productos pendientes antes de cobrar."
+
+    preview = ", ".join(pending_names[:3])
+    if len(pending_names) > 3:
+        preview = f"{preview} y {len(pending_names) - 3} mas"
+
+    if context == "division":
+        return (
+            f"Antes de cobrar esta cuenta entrega o cancela: {preview}. "
+            "Si el cliente ya no lo quiso o hubo un problema, cancela ese producto "
+            "desde Pedido actual e indica el motivo."
+        )
+
+    return (
+        f"Antes de cobrar entrega o cancela: {preview}. "
+        "Si el cliente ya no lo quiso o hubo un problema, cancela ese producto "
+        "desde Pedido actual e indica el motivo."
+    )
+
+
 def order_can_receive_payment(user, order):
     if not user or not user_can(user, "caja.charge"):
         return False, "No tienes permiso de caja para cobrar órdenes."
@@ -2157,7 +2307,7 @@ def order_can_receive_payment(user, order):
     if not order.items_activos:
         return False, "La orden no tiene items activos."
     if not order.todos_entregados:
-        return False, "No se puede cobrar hasta que todos los items estén entregados."
+        return False, payment_pending_delivery_message(order.items_activos)
     return True, None
 
 
@@ -2169,7 +2319,8 @@ def division_can_receive_payment(user, division):
     if not division.items:
         return False, "Esa división no tiene items asignados."
     if not division.todos_entregados:
-        return False, "Esa cuenta no puede cobrarse hasta que sus items estén entregados."
+        pending_items = [division_item.orden_item for division_item in division.items]
+        return False, payment_pending_delivery_message(pending_items, context="division")
     return True, None
 
 

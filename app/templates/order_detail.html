@@ -96,22 +96,35 @@
 
                 <form class="quick-order-content" method="post" action="{{ url_for('web.agregar_item_orden', order_id=order.id) }}" data-quick-order-form>
                     {% if split_capacity >= 2 %}
-                        <div class="quick-client-bar" data-quick-client-bar>
-                            <input type="hidden" name="quick_split_enabled" value="{{ '1' if split_mode else '0' }}" data-quick-split-enabled>
-                            <input type="hidden" name="quick_split_people_count" value="{{ split_people_count }}" data-quick-split-people>
-                            <div class="quick-service-mode" role="group" aria-label="Modo de venta">
-                                <button class="quick-mode-button {{ '' if split_mode else 'is-active' }}" type="button" data-quick-mode="order">
+                        <input type="hidden" name="quick_split_enabled" value="{{ '1' if split_mode else '0' }}" data-quick-split-enabled>
+                        <input type="hidden" name="quick_split_people_count" value="{{ split_people_count }}" data-quick-split-people>
+                        <div class="quick-client-launch" data-quick-client-launch>
+                            <button class="button button-ghost button-small" type="button" data-quick-client-toggle aria-expanded="{{ 'true' if split_mode else 'false' }}">
+                                <i class="fa-solid fa-user-group"></i>
+                                <span>Dividir por cliente</span>
+                            </button>
+                            <span class="quick-active-client-summary" data-quick-active-client-summary {% if not split_mode %}hidden{% endif %}>Cliente 1 activo</span>
+                        </div>
+
+                        <div class="quick-client-bar" data-quick-client-bar {% if not split_mode %}hidden{% endif %}>
+                            <div class="quick-client-tools">
+                                <button class="quick-mode-button" type="button" data-quick-mode="order">
                                     Orden completa
                                 </button>
-                                <button class="quick-mode-button {{ 'is-active' if split_mode else '' }}" type="button" data-quick-mode="clients">
-                                    Por cliente
-                                </button>
+                                <label class="quick-client-count-select">
+                                    <span>Clientes</span>
+                                    <select data-quick-people-select aria-label="Cantidad de clientes">
+                                        {% for count in range(2, split_capacity + 1) %}
+                                            <option value="{{ count }}" {% if split_people_count == count %}selected{% endif %}>{{ count }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </label>
                             </div>
 
-                            <div class="quick-client-strip {{ '' if split_mode else 'is-muted' }}" data-quick-client-strip>
-                                {% for person in range(1, split_people_count + 1) %}
+                            <div class="quick-client-strip" data-quick-client-strip>
+                                {% for person in range(1, split_capacity + 1) %}
                                     {% set client_name = split_labels.get(person) or ('Cliente ' ~ person) %}
-                                    <button class="quick-client-button {{ 'is-active' if loop.first else '' }}" type="button" data-quick-client="{{ person }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">
+                                    <button class="quick-client-button {{ 'is-active' if loop.first else '' }}" type="button" data-quick-client="{{ person }}" aria-pressed="{{ 'true' if loop.first else 'false' }}" {% if person > split_people_count %}hidden{% endif %}>
                                         <span>{{ client_name }}</span>
                                         <strong data-quick-client-count="{{ person }}">0</strong>
                                     </button>
@@ -156,7 +169,7 @@
                                                 <article class="quick-product-card" data-product-card data-product-search="{{ (product.nombre ~ ' ' ~ category_name)|lower }}" data-product-price="{{ product.precio_venta }}" data-stock-managed="{{ '1' if product.controla_stock else '0' }}" data-stock-available="{{ stock_available if product.controla_stock else '' }}" data-low-stock-threshold="{{ low_stock_threshold }}">
                                                     <input type="hidden" name="product_ids" value="{{ product.id }}">
                                                     {% if split_capacity >= 2 %}
-                                                        {% for person in range(1, split_people_count + 1) %}
+                                                        {% for person in range(1, split_capacity + 1) %}
                                                             <input type="hidden" name="quantity_{{ product.id }}_person_{{ person }}" value="0" data-person-qty-input data-person="{{ person }}">
                                                         {% endfor %}
                                                     {% endif %}
@@ -176,7 +189,7 @@
 
                                                     {% if split_capacity >= 2 %}
                                                         <div class="quick-person-counts" data-person-counts hidden>
-                                                            {% for person in range(1, split_people_count + 1) %}
+                                                            {% for person in range(1, split_capacity + 1) %}
                                                                 <span data-person-count-pill="{{ person }}" hidden>
                                                                     {{ split_labels.get(person) or ('Cliente ' ~ person) }}: <b>0</b>
                                                                 </span>
@@ -355,6 +368,11 @@
             const stockAlert = root.querySelector("[data-quick-stock-alert]");
             const orderLocked = submit?.dataset.orderLocked === "true";
             const splitEnabledInput = root.querySelector("[data-quick-split-enabled]");
+            const splitPeopleInput = root.querySelector("[data-quick-split-people]");
+            const clientBar = root.querySelector("[data-quick-client-bar]");
+            const clientToggle = root.querySelector("[data-quick-client-toggle]");
+            const activeClientSummary = root.querySelector("[data-quick-active-client-summary]");
+            const peopleSelect = root.querySelector("[data-quick-people-select]");
             const modeButtons = root.querySelectorAll("[data-quick-mode]");
             const clientStrip = root.querySelector("[data-quick-client-strip]");
             const clientButtons = root.querySelectorAll("[data-quick-client]");
@@ -371,11 +389,67 @@
                 return splitEnabledInput?.value === "1";
             }
 
+            function activePeopleCount() {
+                const count = Number.parseInt(splitPeopleInput?.value || peopleSelect?.value || "2", 10);
+                const max = clientButtons.length || 2;
+                if (Number.isNaN(count)) {
+                    return Math.min(2, max);
+                }
+                return Math.max(2, Math.min(max, count));
+            }
+
+            function setPeopleCount(count) {
+                const nextCount = Math.max(2, Math.min(clientButtons.length || 2, Number.parseInt(count || "2", 10) || 2));
+                if (splitPeopleInput) {
+                    splitPeopleInput.value = String(nextCount);
+                }
+                if (peopleSelect) {
+                    peopleSelect.value = String(nextCount);
+                }
+                clientButtons.forEach((button) => {
+                    const person = Number.parseInt(button.dataset.quickClient || "0", 10);
+                    button.hidden = person > nextCount;
+                });
+                clientCountNodes.forEach((node) => {
+                    const person = Number.parseInt(node.dataset.quickClientCount || "0", 10);
+                    const button = root.querySelector(`[data-quick-client="${person}"]`);
+                    if (button) {
+                        button.hidden = person > nextCount;
+                    }
+                });
+                cards.forEach((card) => {
+                    personInputs(card, false).forEach((input) => {
+                        const person = Number.parseInt(input.dataset.person || "0", 10);
+                        if (person > nextCount) {
+                            input.value = 0;
+                            const pill = card.querySelector(`[data-person-count-pill="${person}"]`);
+                            if (pill) {
+                                pill.hidden = true;
+                            }
+                        }
+                    });
+                });
+                if (Number.parseInt(activeClient || "1", 10) > nextCount) {
+                    setActiveClient("1");
+                }
+                updateSummary();
+            }
+
             function setSplitMode(enabled) {
                 if (splitEnabledInput) {
                     splitEnabledInput.value = enabled ? "1" : "0";
                 }
                 root.classList.toggle("is-client-mode", enabled);
+                if (clientBar) {
+                    clientBar.hidden = !enabled;
+                }
+                if (clientToggle) {
+                    clientToggle.setAttribute("aria-expanded", enabled ? "true" : "false");
+                    clientToggle.classList.toggle("is-active", enabled);
+                }
+                if (activeClientSummary) {
+                    activeClientSummary.hidden = !enabled;
+                }
                 clientStrip?.classList.toggle("is-muted", !enabled);
                 modeButtons.forEach((button) => {
                     const isActive = button.dataset.quickMode === (enabled ? "clients" : "order");
@@ -388,6 +462,9 @@
                         input.readOnly = enabled;
                     }
                 });
+                if (enabled) {
+                    setPeopleCount(activePeopleCount());
+                }
                 updateSummary();
             }
 
@@ -398,13 +475,24 @@
                     button.classList.toggle("is-active", isActive);
                     button.setAttribute("aria-pressed", isActive ? "true" : "false");
                 });
+                const activeName = root.querySelector(`[data-quick-client="${activeClient}"] span`)?.textContent?.trim();
+                if (activeClientSummary) {
+                    activeClientSummary.textContent = activeName ? `${activeName} activo` : "Cliente activo";
+                }
                 cards.forEach((card) => {
                     card.classList.toggle("has-active-client-qty", personQuantity(card, activeClient) > 0);
                 });
             }
 
-            function personInputs(card) {
-                return Array.from(card?.querySelectorAll("[data-person-qty-input]") || []);
+            function personInputs(card, visibleOnly = true) {
+                const maxPeople = activePeopleCount();
+                return Array.from(card?.querySelectorAll("[data-person-qty-input]") || []).filter((input) => {
+                    if (!visibleOnly) {
+                        return true;
+                    }
+                    const person = Number.parseInt(input.dataset.person || "0", 10);
+                    return person >= 1 && person <= maxPeople;
+                });
             }
 
             function personQuantity(card, person) {
@@ -636,6 +724,16 @@
             }
 
             root.addEventListener("click", (event) => {
+                const clientToggleButton = event.target.closest("[data-quick-client-toggle]");
+                if (clientToggleButton) {
+                    const nextMode = !splitModeEnabled();
+                    setSplitMode(nextMode);
+                    if (nextMode) {
+                        setActiveClient(activeClient);
+                    }
+                    return;
+                }
+
                 const modeButton = event.target.closest("[data-quick-mode]");
                 if (modeButton) {
                     setSplitMode(modeButton.dataset.quickMode === "clients");
@@ -686,6 +784,13 @@
                     updateSummary();
                     hideStockAlert();
                     search?.focus();
+                }
+            });
+
+            root.addEventListener("change", (event) => {
+                if (event.target.matches("[data-quick-people-select]")) {
+                    setSplitMode(true);
+                    setPeopleCount(event.target.value);
                 }
             });
 

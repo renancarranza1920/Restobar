@@ -1263,6 +1263,7 @@
             const movementType = typeSelect?.value || "compra";
             const isPurchase = movementType === "compra";
             const selectedInventoryValue = productSelect?.value || "new";
+            const createsInventoryProduct = isPurchase && selectedInventoryValue === "new";
 
             if (!isPurchase && (!selectedInventoryValue || selectedInventoryValue === "new") && productSelect) {
                 productSelect.value = firstExistingInventoryValue();
@@ -1271,6 +1272,7 @@
             if (!isPurchase) {
                 loadProductDefaults();
             }
+            productSelect?.querySelector('option[value="new"]')?.toggleAttribute("disabled", !isPurchase);
 
             const packages = Math.max(Math.trunc(numericValue(packagesInput)), 0);
             const packageUnits = Math.max(Math.trunc(numericValue(packageUnitsInput)), 1);
@@ -1284,15 +1286,15 @@
             setSectionVisible(quantityRow, true, "grid");
             setSectionVisible(costRow, true, "grid");
             setSectionVisible(inventorySummary, true, "flex");
-            setSectionVisible(existingInventoryField, !isPurchase, "block");
-            setSectionVisible(newInventoryFields, isPurchase, "grid");
+            setSectionVisible(existingInventoryField, true, "block");
+            setSectionVisible(newInventoryFields, createsInventoryProduct, "grid");
             setSectionVisible(purchaseUnitWrap, isPurchase, "block");
             setSectionVisible(costGroup, isPurchase, "block");
             setSectionVisible(cashSummary, isPurchase, "flex");
             setSectionVisible(saleTargetSection, !isPurchase, "block");
 
-            setFieldEnabled(newProductInput, isPurchase);
-            setFieldEnabled(productSelect, !isPurchase);
+            setFieldEnabled(newProductInput, createsInventoryProduct);
+            setFieldEnabled(productSelect, true);
             setFieldEnabled(referencePriceInput, isPurchase);
             setFieldEnabled(purchaseUnitInput, isPurchase);
             setFieldEnabled(saleProductSelect, !isPurchase);
@@ -1300,20 +1302,20 @@
 
             if (newInventoryFields) {
                 newInventoryFields.querySelectorAll("input, select").forEach((field) => {
-                    setFieldEnabled(field, isPurchase);
+                    setFieldEnabled(field, createsInventoryProduct);
                 });
             }
 
             if (packageUnitsInput) {
-                packageUnitsInput.readOnly = !isPurchase;
+                packageUnitsInput.readOnly = !isPurchase || !createsInventoryProduct;
             }
 
             if (isPurchase) {
                 if (packagesLabel) {
-                    packagesLabel.textContent = "Paquetes comprados";
+                    packagesLabel.textContent = createsInventoryProduct ? "Paquetes comprados" : "Paquetes a agregar";
                 }
                 if (unitsLabel) {
-                    unitsLabel.textContent = "Unidades sueltas";
+                    unitsLabel.textContent = createsInventoryProduct ? "Unidades sueltas" : "Unidades sueltas a agregar";
                 }
                 if (priceLabel) {
                     priceLabel.textContent = "Costo por paquete";
@@ -1326,6 +1328,9 @@
                 }
                 if (cashSummaryLabel) {
                     cashSummaryLabel.textContent = "Gasto de compra";
+                }
+                if (!createsInventoryProduct) {
+                    loadProductDefaults();
                 }
             } else {
                 if (packagesLabel) {
