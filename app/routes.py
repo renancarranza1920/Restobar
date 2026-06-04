@@ -81,6 +81,7 @@ from .services import (
     get_inventory_categories,
     get_inventory_products,
     get_inventory_sale_products,
+    inventory_average_unit_cost,
     inventory_fifo_consumption,
     inventory_stock_breakdown,
     get_low_stock_products,
@@ -3589,6 +3590,10 @@ def inventario():
     inventory_breakdowns = {
         product.id: inventory_stock_breakdown(product) for product in products
     }
+    inventory_costs = {
+        product.id: inventory_breakdowns[product.id]["average_unit_cost"]
+        for product in products
+    }
     sale_products_by_source = {}
     for sale_product in sale_products:
         sale_products_by_source.setdefault(sale_product.producto_inventario_id, []).append(
@@ -3614,6 +3619,7 @@ def inventario():
         sale_products=sale_products,
         movements=movements,
         inventory_breakdowns=inventory_breakdowns,
+        inventory_costs=inventory_costs,
         sale_products_by_source=sale_products_by_source,
         low_stock_products=get_low_stock_products(limit=8),
         inventory_summary={
@@ -3632,12 +3638,17 @@ def inventario():
 def nuevo_movimiento_inventario():
     movement_mode = request.args.get("mode") if request.args.get("mode") in {"compra", "salida"} else "compra"
     selected_product_id = parse_int(request.args.get("product_id"), 0)
+    products = get_inventory_products()
+    inventory_costs = {
+        product.id: inventory_average_unit_cost(product) for product in products
+    }
     return render_template(
         "inventory_form.html",
         page_title="Nuevo movimiento de inventario",
-        products=get_inventory_products(),
+        products=products,
         sale_products=get_inventory_sale_products(),
         categories=get_inventory_categories(),
+        inventory_costs=inventory_costs,
         movement_mode=movement_mode,
         selected_product_id=selected_product_id,
     )
@@ -3648,6 +3659,8 @@ def nuevo_movimiento_inventario():
 def registrar_movimiento_inventario():
     raw_product_id = (request.form.get("product_id") or "").strip()
     product_id = parse_int(raw_product_id)
+    purchase_source_type = (request.form.get("purchase_source_type") or "inventory").strip()
+    purchase_source_id = parse_int(request.form.get("purchase_source_id"), default=0)
     movement_type = request.form.get("movement_type")
     packages_count = parse_int(request.form.get("packages"), default=0)
     units = parse_int(request.form.get("units"), default=0)
@@ -3667,7 +3680,13 @@ def registrar_movimiento_inventario():
             flash("En una compra, paquetes y unidades no pueden ser negativos.", "error")
             return redirect(url_for("web.nuevo_movimiento_inventario"))
 
-        is_new_inventory_product = raw_product_id == "new" or product_id <= 0
+        if purchase_source_type == "inventory" and purchase_source_id > 0:
+            product_id = purchase_source_id
+            raw_product_id = str(purchase_source_id)
+        is_new_inventory_product = purchase_source_type == "new" or (
+            purchase_source_type not in {"sale", "inventory"}
+            and (raw_product_id == "new" or product_id <= 0)
+        )
         if is_new_inventory_product:
             product_name = (request.form.get("inventory_name") or "").strip()
             category_id = parse_int(request.form.get("inventory_category_id"))
@@ -3701,6 +3720,54 @@ def registrar_movimiento_inventario():
             )
             db.session.add(product)
             db.session.flush()
+        elif purchase_source_type == "sale" and purchase_source_id > 0:
+            sale_source = (
+                Producto.query.options(joinedload(Producto.categoria))
+                .filter(Producto.id == purchase_source_id)
+                .filter(Producto.es_inventario.is_(False))
+                .with_for_update()
+                .first()
+            )
+            if sale_source is None:
+                flash("El producto del catalogo seleccionado no existe.", "error")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+            if sale_source.requiere_cocina:
+                flash("Los productos de cocina no se compran para bodega directa.", "warning")
+                return redirect(url_for("web.nuevo_movimiento_inventario"))
+
+            purchase_unit = (request.form.get("purchase_unit") or "caja").strip() or "caja"
+            package_units = max(package_units or sale_source.unidades_por_paquete or 1, 1)
+            if sale_source.producto_inventario_id:
+                product = (
+                    Producto.query.options(joinedload(Producto.categoria))
+                    .filter(Producto.id == sale_source.producto_inventario_id)
+                    .filter(Producto.es_inventario.is_(True))
+                    .with_for_update()
+                    .first()
+                )
+                if product is None:
+                    flash("El producto de bodega vinculado ya no existe.", "error")
+                    return redirect(url_for("web.nuevo_movimiento_inventario"))
+                purchase_unit = (request.form.get("purchase_unit") or product.unidad_compra or purchase_unit).strip() or purchase_unit
+                package_units = max(package_units or product.unidades_por_paquete or 1, 1)
+            else:
+                product = Producto(
+                    nombre=sale_source.nombre,
+                    imagen_url=sale_source.imagen_url,
+                    categoria_id=sale_source.categoria_id,
+                    producto_inventario_id=None,
+                    es_inventario=True,
+                    precio_costo=sale_source.precio_costo,
+                    precio_venta=parse_decimal("0"),
+                    unidad_compra=purchase_unit,
+                    unidades_por_paquete=package_units,
+                    stock_actual=0,
+                    maneja_stock=True,
+                    disponible=False,
+                )
+                db.session.add(product)
+                db.session.flush()
+                sale_source.producto_inventario_id = product.id
         else:
             product = (
                 Producto.query.options(joinedload(Producto.categoria))

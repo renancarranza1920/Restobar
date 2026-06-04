@@ -1923,6 +1923,23 @@ def inventory_fifo_consumption(product, quantity):
     }
 
 
+def inventory_average_unit_cost(product):
+    if not product:
+        return ZERO
+
+    layers = inventory_fifo_layers(product)
+    total_units = sum(layer["remaining"] for layer in layers)
+    total_cost = money(
+        sum(layer["unit_cost"] * layer["remaining"] for layer in layers)
+    )
+    if total_units > 0:
+        return money(total_cost / total_units)
+
+    if int(product.stock_actual or 0) > 0:
+        return money(product.precio_costo or ZERO)
+    return money(product.precio_costo or ZERO)
+
+
 def inventory_stock_breakdown(product):
     units_per_package = max(int(product.unidades_por_paquete or 1), 1)
     total_units = max(int(product.stock_actual or 0), 0)
@@ -1933,6 +1950,7 @@ def inventory_stock_breakdown(product):
         "units_per_package": units_per_package,
         "unit_label": product.unidad_compra or "paquete",
         "layers": inventory_fifo_layers(product),
+        "average_unit_cost": inventory_average_unit_cost(product),
     }
 
 

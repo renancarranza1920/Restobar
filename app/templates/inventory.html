@@ -4,9 +4,13 @@
 <div class="inventory-workspace">
     <header class="inventory-command-header">
         <div>
-            <p class="inventory-kicker">Inventario</p>
-            <h1>Bodega y stock de venta</h1>
-            <p>Compra entra a bodega. Desde bodega sacas paquetes o unidades hacia productos disponibles para vender.</p>
+            <h1>Inventario</h1>
+            <div class="inventory-mini-stats">
+                <span>{{ inventory_summary.products_count }} bodega</span>
+                <span>{{ inventory_summary.total_units }} uds</span>
+                <span>{{ inventory_summary.sale_products_count }} venta</span>
+                <span>PEPS activo</span>
+            </div>
         </div>
         <div class="inventory-command-actions">
             <a class="button button-primary shadow-sm" href="{{ url_for('web.nuevo_movimiento_inventario', mode='compra') }}">
@@ -20,34 +24,6 @@
             </a>
         </div>
     </header>
-
-    <section class="inventory-ops-strip">
-        <article>
-            <span>Bodega</span>
-            <strong>{{ inventory_summary.products_count }}</strong>
-            <small>productos comprables</small>
-        </article>
-        <article>
-            <span>Existencia</span>
-            <strong>{{ inventory_summary.total_units }}</strong>
-            <small>unidades en bodega</small>
-        </article>
-        <article>
-            <span>Venta</span>
-            <strong>{{ inventory_summary.sale_products_count }}</strong>
-            <small>productos alimentados</small>
-        </article>
-        <article class="{{ 'is-warning' if inventory_summary.low_inventory_count else '' }}">
-            <span>Alertas</span>
-            <strong>{{ inventory_summary.low_inventory_count }}</strong>
-            <small>stock bajo</small>
-        </article>
-    </section>
-
-    <section class="inventory-flow-note">
-        <i class="fa-solid fa-route"></i>
-        <span>PEPS activo: al sacar de bodega se toma primero el lote mas antiguo disponible.</span>
-    </section>
 
     <section class="inventory-operation-grid">
         <article class="inventory-work-panel inventory-warehouse-panel">
@@ -70,7 +46,7 @@
                                 <div class="warehouse-mark">{{ product.nombre[:1]|upper }}</div>
                                 <div>
                                     <h3>{{ product.nombre }}</h3>
-                                    <p>{{ product.categoria.nombre if product.categoria else 'Sin categoria' }} | {{ product.unidad_compra }} x {{ product.unidades_por_paquete }}</p>
+                                    <p>{{ product.categoria.nombre if product.categoria else 'Sin categoria' }} | {{ product.unidad_compra }} x {{ product.unidades_por_paquete }} | Costo prom. {{ (stock.average_unit_cost if stock else product.precio_costo)|money }}</p>
                                     {% if linked_sale_products %}
                                         <div class="warehouse-links">
                                             {% for sale_product in linked_sale_products %}
@@ -179,39 +155,42 @@
         {% if movements %}
             <div class="movement-table">
                 {% for movement in movements %}
-                    <article class="movement-row">
-                        <div class="movement-type {{ 'is-in' if movement.tipo == 'compra' else 'is-out' }}">
-                            <i class="fa-solid {{ 'fa-arrow-down' if movement.tipo == 'compra' else 'fa-arrow-up' }}"></i>
-                            <span>{{ movement.tipo }}</span>
-                        </div>
-                        <div>
-                            <strong>{{ movement.producto.nombre if movement.producto else '-' }}</strong>
-                            <span>
-                                {% if movement.producto_destino %}
-                                    Hacia {{ movement.producto_destino.nombre }}
-                                {% else %}
-                                    {{ movement.usuario.nombre_completo if movement.usuario else 'Sistema' }}
-                                {% endif %}
+                    <details class="movement-detail-row">
+                        <summary>
+                            <span class="movement-type {{ 'is-in' if movement.tipo == 'compra' else 'is-out' }}">
+                                <i class="fa-solid {{ 'fa-arrow-down' if movement.tipo == 'compra' else 'fa-arrow-up' }}"></i>
+                                {{ movement.tipo }}
                             </span>
+                            <strong>{{ movement.producto.nombre if movement.producto else '-' }}</strong>
+                            <span>{{ movement.cantidad_unidades }} uds</span>
+                            <span data-local-datetime="{{ movement.created_at|datetime_iso }}">{{ movement.created_at|datetime_short }}</span>
+                            <em>Ver detalles</em>
+                        </summary>
+                        <div class="movement-detail-body">
+                            <div>
+                                <span>Destino/usuario</span>
+                                <strong>
+                                    {% if movement.producto_destino %}
+                                        {{ movement.producto_destino.nombre }}
+                                    {% else %}
+                                        {{ movement.usuario.nombre_completo if movement.usuario else 'Sistema' }}
+                                    {% endif %}
+                                </strong>
+                            </div>
+                            <div>
+                                <span>Paquetes</span>
+                                <strong>{{ movement.cantidad_paquetes or 0 }}</strong>
+                            </div>
+                            <div>
+                                <span>Monto compra</span>
+                                <strong>{{ movement.precio_unitario|money if movement.precio_unitario else '$0.00' }}</strong>
+                            </div>
+                            <div>
+                                <span>Notas</span>
+                                <strong>{{ movement.notas or 'Sin notas' }}</strong>
+                            </div>
                         </div>
-                        <div>
-                            <strong>{{ movement.cantidad_unidades }} uds</strong>
-                            {% if movement.cantidad_paquetes %}
-                                <span>{{ movement.cantidad_paquetes }} paquete{{ '' if movement.cantidad_paquetes == 1 else 's' }}</span>
-                            {% else %}
-                                <span>unidades sueltas</span>
-                            {% endif %}
-                        </div>
-                        <div>
-                            {% if movement.tipo == 'compra' and movement.precio_unitario %}
-                                <strong>{{ movement.precio_unitario|money }}</strong>
-                                <span>compra</span>
-                            {% else %}
-                                <strong data-local-datetime="{{ movement.created_at|datetime_iso }}">{{ movement.created_at|datetime_short }}</strong>
-                                <span>fecha</span>
-                            {% endif %}
-                        </div>
-                    </article>
+                    </details>
                 {% endfor %}
             </div>
         {% else %}

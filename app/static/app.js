@@ -1166,6 +1166,19 @@
         const typeSelect = inventoryForm.querySelector("[data-inventory-type]");
         const modeButtons = inventoryForm.querySelectorAll("[data-inventory-mode-button]");
         const existingInventoryField = inventoryForm.querySelector("[data-existing-inventory-field]");
+        const purchaseProductPicker = inventoryForm.querySelector("[data-purchase-product-picker]");
+        const releaseProductField = inventoryForm.querySelector("[data-release-product-field]");
+        const purchaseCombobox = inventoryForm.querySelector("[data-purchase-combobox]");
+        const purchaseTrigger = inventoryForm.querySelector("[data-purchase-trigger]");
+        const purchasePanel = inventoryForm.querySelector("[data-purchase-panel]");
+        const purchaseSearch = inventoryForm.querySelector("[data-purchase-search]");
+        const purchaseNoResults = inventoryForm.querySelector("[data-purchase-no-results]");
+        const purchaseSelectedImage = inventoryForm.querySelector("[data-purchase-selected-image]");
+        const purchaseSelectedName = inventoryForm.querySelector("[data-purchase-selected-name]");
+        const purchaseSelectedMeta = inventoryForm.querySelector("[data-purchase-selected-meta]");
+        const purchaseCards = inventoryForm.querySelectorAll("[data-purchase-card]");
+        const purchaseSourceTypeInput = inventoryForm.querySelector("[data-purchase-source-type]");
+        const purchaseSourceIdInput = inventoryForm.querySelector("[data-purchase-source-id]");
         const newInventoryFields = inventoryForm.querySelector("[data-new-inventory-fields]");
         const categoryModal = document.querySelector("[data-inventory-category-modal]");
         const categoryNameInput = categoryModal?.querySelector("[data-inventory-category-name]");
@@ -1197,6 +1210,11 @@
         const cashSummary = inventoryForm.querySelector("[data-inventory-cash-summary]");
         const cashSummaryLabel = inventoryForm.querySelector("[data-inventory-cash-summary] span");
         const cashTotalNode = inventoryForm.querySelector("[data-inventory-cash-total]");
+        const costPanel = inventoryForm.querySelector("[data-cost-panel]");
+        const costCurrentNode = inventoryForm.querySelector("[data-cost-current]");
+        const costIncomingNode = inventoryForm.querySelector("[data-cost-incoming]");
+        const costEstimatedNode = inventoryForm.querySelector("[data-cost-estimated]");
+        const costMarginNode = inventoryForm.querySelector("[data-cost-margin]");
 
         function numericValue(input) {
             const value = Number.parseFloat(input?.value || "0");
@@ -1207,25 +1225,125 @@
             return productSelect?.selectedOptions?.[0] || null;
         }
 
+        function activePurchaseCard() {
+            return inventoryForm.querySelector("[data-purchase-card].is-active") || purchaseCards[0] || null;
+        }
+
+        function selectedProductData() {
+            return typeSelect?.value === "compra" ? activePurchaseCard() : selectedProductOption();
+        }
+
         function firstExistingInventoryValue() {
             return Array.from(productSelect?.options || [])
                 .find((option) => option.value && option.value !== "new")?.value || "new";
         }
 
         function loadProductDefaults(force = false) {
-            const option = selectedProductOption();
-            if (!option) {
+            const source = selectedProductData();
+            if (!source) {
                 return;
             }
 
             if (packageUnitsInput && (force || !packageUnitsInput.value || typeSelect?.value === "salida")) {
-                packageUnitsInput.value = option.dataset.packageUnits || "1";
+                packageUnitsInput.value = source.dataset.packageUnits || "1";
             }
-            if (purchaseUnitInput && (force || !purchaseUnitInput.value || productSelect?.value !== "new")) {
-                purchaseUnitInput.value = option.dataset.purchaseUnit || "caja";
+            if (purchaseUnitInput && (force || !purchaseUnitInput.value || source.dataset.sourceType !== "new")) {
+                purchaseUnitInput.value = source.dataset.purchaseUnit || "caja";
             }
-            if (saleProductNameInput && productSelect?.value !== "new" && (force || !saleProductNameInput.value)) {
-                saleProductNameInput.value = option.dataset.name || "";
+            if (saleProductNameInput && source.dataset.sourceType !== "new" && (force || !saleProductNameInput.value)) {
+                saleProductNameInput.value = source.dataset.name || "";
+            }
+        }
+
+        function sourceNumber(source, name) {
+            const value = Number.parseFloat(source?.dataset?.[name] || "0");
+            return Number.isFinite(value) ? value : 0;
+        }
+
+        function setPurchaseDropdown(open) {
+            if (!purchasePanel || !purchaseTrigger) {
+                return;
+            }
+            purchasePanel.hidden = !open;
+            purchaseTrigger.setAttribute("aria-expanded", open ? "true" : "false");
+            purchaseCombobox?.classList.toggle("is-open", open);
+            if (open) {
+                window.setTimeout(() => purchaseSearch?.focus(), 0);
+            }
+        }
+
+        function updatePurchaseTrigger() {
+            const card = activePurchaseCard();
+            if (!card) {
+                return;
+            }
+            const image = card.querySelector(".purchase-source-image");
+            if (purchaseSelectedImage && image) {
+                purchaseSelectedImage.className = image.className;
+                purchaseSelectedImage.innerHTML = image.innerHTML;
+            }
+            if (purchaseSelectedName) {
+                purchaseSelectedName.textContent = card.dataset.name || card.querySelector("strong")?.textContent?.trim() || "Producto";
+            }
+            if (purchaseSelectedMeta) {
+                purchaseSelectedMeta.textContent = card.dataset.meta || card.querySelector("small")?.textContent?.trim() || "";
+            }
+        }
+
+        function filterPurchaseCards() {
+            const query = (purchaseSearch?.value || "").trim().toLowerCase();
+            let visible = 0;
+            purchaseCards.forEach((card) => {
+                const haystack = `${card.dataset.name || ""} ${card.dataset.meta || ""} ${card.textContent || ""}`.toLowerCase();
+                const matches = !query || haystack.includes(query);
+                card.hidden = !matches;
+                if (matches) {
+                    visible += 1;
+                }
+            });
+            if (purchaseNoResults) {
+                purchaseNoResults.hidden = visible > 0;
+            }
+        }
+
+        function updateCostPreview(totalUnits, packageUnits, referencePrice) {
+            const movementType = typeSelect?.value || "compra";
+            const isPurchase = movementType === "compra";
+            setSectionVisible(costPanel, isPurchase, "grid");
+            if (!isPurchase) {
+                return;
+            }
+
+            const source = activePurchaseCard();
+            const currentUnits = Math.max(Math.trunc(sourceNumber(source, "currentStock")), 0);
+            const currentAverage = Math.max(sourceNumber(source, "averageCost"), 0);
+            const salePrice = Math.max(sourceNumber(source, "salePrice"), 0);
+            const incomingUnitCost = referencePrice > 0 && packageUnits > 0
+                ? referencePrice / packageUnits
+                : 0;
+            const estimatedAverage = currentUnits + totalUnits > 0
+                ? ((currentUnits * currentAverage) + (totalUnits * incomingUnitCost)) / (currentUnits + totalUnits)
+                : incomingUnitCost;
+
+            if (costCurrentNode) {
+                costCurrentNode.textContent = formatMoney(currentAverage);
+            }
+            if (costIncomingNode) {
+                costIncomingNode.textContent = incomingUnitCost > 0 ? formatMoney(incomingUnitCost) : "Sin costo";
+            }
+            if (costEstimatedNode) {
+                costEstimatedNode.textContent = estimatedAverage > 0 ? formatMoney(estimatedAverage) : "Sin costo";
+            }
+            if (costMarginNode) {
+                if (salePrice > 0 && estimatedAverage > 0) {
+                    const margin = salePrice - estimatedAverage;
+                    const marginPercent = (margin / salePrice) * 100;
+                    costMarginNode.textContent = `${formatMoney(margin)} (${marginPercent.toFixed(1)}%)`;
+                    costMarginNode.classList.toggle("text-danger", margin < 0);
+                } else {
+                    costMarginNode.textContent = "Sin precio";
+                    costMarginNode.classList.remove("text-danger");
+                }
             }
         }
 
@@ -1263,7 +1381,22 @@
             const movementType = typeSelect?.value || "compra";
             const isPurchase = movementType === "compra";
             const selectedInventoryValue = productSelect?.value || "new";
-            const createsInventoryProduct = isPurchase && selectedInventoryValue === "new";
+            const activeCard = activePurchaseCard();
+            const sourceType = activeCard?.dataset.sourceType || "new";
+            const sourceId = activeCard?.dataset.sourceId || "0";
+            const createsInventoryProduct = isPurchase && sourceType === "new";
+            const createsWarehouseFromSale = isPurchase && sourceType === "sale" && !(activeCard?.dataset.linkedInventoryId);
+            const canEditPackageFormat = createsInventoryProduct || createsWarehouseFromSale;
+
+            if (purchaseSourceTypeInput) {
+                purchaseSourceTypeInput.value = sourceType;
+            }
+            if (purchaseSourceIdInput) {
+                purchaseSourceIdInput.value = sourceId;
+            }
+            if (isPurchase && productSelect) {
+                productSelect.value = sourceType === "inventory" ? sourceId : "new";
+            }
 
             if (!isPurchase && (!selectedInventoryValue || selectedInventoryValue === "new") && productSelect) {
                 productSelect.value = firstExistingInventoryValue();
@@ -1286,7 +1419,9 @@
             setSectionVisible(quantityRow, true, "grid");
             setSectionVisible(costRow, true, "grid");
             setSectionVisible(inventorySummary, true, "flex");
-            setSectionVisible(existingInventoryField, true, "block");
+            setSectionVisible(existingInventoryField, false, "block");
+            setSectionVisible(purchaseProductPicker, isPurchase, "block");
+            setSectionVisible(releaseProductField, !isPurchase, "block");
             setSectionVisible(newInventoryFields, createsInventoryProduct, "grid");
             setSectionVisible(purchaseUnitWrap, isPurchase, "block");
             setSectionVisible(costGroup, isPurchase, "block");
@@ -1307,7 +1442,7 @@
             }
 
             if (packageUnitsInput) {
-                packageUnitsInput.readOnly = !isPurchase || !createsInventoryProduct;
+                packageUnitsInput.readOnly = !isPurchase || !canEditPackageFormat;
             }
 
             if (isPurchase) {
@@ -1354,6 +1489,8 @@
             if (cashTotalNode) {
                 cashTotalNode.textContent = formatMoney(cashTotal);
             }
+            updateCostPreview(totalUnits, packageUnits, referencePrice);
+            updatePurchaseTrigger();
 
             syncModeButtons();
         }
@@ -1378,6 +1515,18 @@
         productSelect?.addEventListener("change", () => {
             loadProductDefaults(true);
             syncInventorySummary();
+        });
+        purchaseTrigger?.addEventListener("click", () => {
+            setPurchaseDropdown(purchasePanel?.hidden !== false);
+        });
+        purchaseSearch?.addEventListener("input", filterPurchaseCards);
+        purchaseCards.forEach((card) => {
+            card.addEventListener("click", () => {
+                purchaseCards.forEach((item) => item.classList.toggle("is-active", item === card));
+                loadProductDefaults(true);
+                syncInventorySummary();
+                setPurchaseDropdown(false);
+            });
         });
         typeSelect?.addEventListener("change", syncInventorySummary);
         modeButtons.forEach((button) => {
@@ -1404,12 +1553,26 @@
             if (event.key === "Escape" && categoryModal && !categoryModal.hidden) {
                 closeCategoryModal();
             }
+            if (event.key === "Escape" && purchasePanel && !purchasePanel.hidden) {
+                setPurchaseDropdown(false);
+            }
+        });
+        document.addEventListener("click", (event) => {
+            if (purchaseCombobox && !purchaseCombobox.contains(event.target)) {
+                setPurchaseDropdown(false);
+            }
         });
         saleProductSelect?.addEventListener("change", syncSaleProductFields);
         [packagesInput, packageUnitsInput, unitsInput, referencePriceInput, salePriceInput].forEach((input) => {
             input?.addEventListener("input", syncInventorySummary);
         });
 
+        const startCard = inventoryForm.querySelector("[data-purchase-card][data-start-active='true']");
+        if (startCard) {
+            purchaseCards.forEach((item) => item.classList.toggle("is-active", item === startCard));
+        }
+        filterPurchaseCards();
+        updatePurchaseTrigger();
         loadProductDefaults(true);
         syncInventorySummary();
     }
