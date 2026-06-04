@@ -2473,6 +2473,10 @@ body.modal-open {
     overflow: hidden;
 }
 
+body.payment-drawer-open {
+    overflow: hidden;
+}
+
 .inline-alert {
     display: flex;
     align-items: flex-start;
@@ -2604,6 +2608,94 @@ body.modal-open {
     display: none;
 }
 
+.quick-client-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.85rem;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--filament-border);
+    background: #ffffff;
+}
+
+.quick-service-mode {
+    display: inline-grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.3rem;
+    padding: 0.28rem;
+    border: 1px solid var(--filament-border);
+    border-radius: var(--filament-radius);
+    background: #f8fafc;
+}
+
+.quick-mode-button {
+    min-height: 38px;
+    padding: 0.45rem 0.75rem;
+    border: 0;
+    border-radius: calc(var(--filament-radius) - 3px);
+    background: transparent;
+    color: var(--filament-muted);
+    cursor: pointer;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.quick-mode-button.is-active {
+    background: #ffffff;
+    color: var(--filament-primary);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.quick-client-strip {
+    display: flex;
+    gap: 0.55rem;
+    overflow-x: auto;
+    padding-bottom: 0.1rem;
+}
+
+.quick-client-strip.is-muted {
+    opacity: 0.62;
+}
+
+.quick-client-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 42px;
+    padding: 0.48rem 0.75rem;
+    border: 1px solid var(--filament-border);
+    border-radius: var(--filament-radius);
+    background: #fff;
+    color: var(--filament-text);
+    cursor: pointer;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.quick-client-button strong {
+    display: inline-grid;
+    place-items: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 0.4rem;
+    border-radius: 999px;
+    background: #eef2ff;
+    color: #1d4ed8;
+    font-size: 0.8rem;
+}
+
+.quick-client-button.is-active {
+    border-color: #60a5fa;
+    background: #dbeafe;
+    color: #1d4ed8;
+    box-shadow: 0 12px 26px rgba(37, 99, 235, 0.16);
+}
+
+.quick-client-button.is-active strong {
+    background: #1d4ed8;
+    color: #fff;
+}
+
 .quick-order-toolbar {
     display: grid;
     gap: 0.85rem;
@@ -2721,6 +2813,11 @@ body.modal-open {
     transform: translateY(-2px);
 }
 
+.quick-product-card.has-active-client-qty {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.16), 0 14px 28px rgba(37, 99, 235, 0.15);
+}
+
 .quick-product-media {
     display: grid;
     place-items: center;
@@ -2728,6 +2825,33 @@ body.modal-open {
     aspect-ratio: 4 / 3;
     border-radius: var(--filament-radius);
     background: #eef2f7;
+}
+
+.quick-product-media[data-product-tap] {
+    position: relative;
+    cursor: pointer;
+}
+
+.quick-product-media[data-product-tap]::after {
+    content: "+";
+    position: absolute;
+    right: 0.55rem;
+    bottom: 0.55rem;
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: rgba(37, 99, 235, 0.94);
+    color: #fff;
+    font-size: 1.25rem;
+    font-weight: 900;
+    box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
+}
+
+.quick-product-media[data-product-tap]:focus-visible {
+    outline: 3px solid rgba(37, 99, 235, 0.3);
+    outline-offset: 3px;
 }
 
 .quick-product-media img {
@@ -2836,6 +2960,30 @@ body.modal-open {
     opacity: 0.72;
 }
 
+.quick-person-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    min-height: 24px;
+}
+
+.quick-person-counts span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    padding: 0.25rem 0.45rem;
+    border: 1px solid rgba(37, 99, 235, 0.18);
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.quick-person-counts b {
+    color: inherit;
+}
+
 .quick-order-summary {
     position: sticky;
     top: 1rem;
@@ -2851,6 +2999,444 @@ body.modal-open {
     display: block;
     margin-top: 0.2rem;
     font-size: 1.25rem;
+}
+
+.order-workspace {
+    width: min(100%, 1540px);
+    margin: 0 auto;
+    display: grid;
+    gap: 1rem;
+}
+
+.order-command-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--app-border, var(--filament-border));
+    border-radius: var(--filament-radius);
+    background: var(--app-surface, var(--filament-surface));
+    box-shadow: var(--app-shadow-soft, var(--filament-shadow));
+}
+
+.order-title-block {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    min-width: 0;
+}
+
+.order-back-button,
+.order-payment-close {
+    display: inline-grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    border: 1px solid var(--app-border, var(--filament-border));
+    border-radius: var(--filament-radius);
+    background: var(--app-surface-muted, #f8fafc);
+    color: var(--app-muted, var(--filament-muted));
+}
+
+.order-title-copy {
+    min-width: 0;
+}
+
+.order-title-copy h1 {
+    margin: 0.15rem 0 0;
+    font-size: 1.9rem;
+    line-height: 1.1;
+    color: var(--app-text, var(--filament-text));
+}
+
+.order-title-copy p {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.55rem 0 0;
+    color: var(--app-muted, var(--filament-muted));
+    font-size: 0.9rem;
+}
+
+.order-kicker-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    color: var(--app-primary, var(--filament-primary));
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0;
+}
+
+.order-command-actions {
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+.order-command-actions form {
+    display: flex;
+}
+
+.order-charge-button {
+    gap: 0.55rem;
+}
+
+.order-charge-button strong {
+    padding-left: 0.55rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.38);
+    font-size: 0.95rem;
+}
+
+.order-status-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.7rem;
+}
+
+.order-status-item {
+    min-width: 0;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--app-border, var(--filament-border));
+    border-radius: var(--filament-radius);
+    background: var(--app-surface, var(--filament-surface));
+    box-shadow: var(--app-shadow-soft, var(--filament-shadow));
+}
+
+.order-status-item > span {
+    display: block;
+    color: var(--app-muted, var(--filament-muted));
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0;
+}
+
+.order-status-item > strong {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 1.15rem;
+    color: var(--app-text, var(--filament-text));
+}
+
+.order-service-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+    gap: 1rem;
+    align-items: start;
+}
+
+.order-service-grid.items-only {
+    grid-template-columns: minmax(0, 920px);
+    justify-content: center;
+}
+
+.order-catalog-panel,
+.order-ticket-panel {
+    min-width: 0;
+}
+
+.order-ticket-header {
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.order-ticket-header .button {
+    flex-shrink: 0;
+}
+
+.order-payment-drawer[hidden] {
+    display: none !important;
+}
+
+.order-payment-drawer {
+    position: fixed;
+    inset: 0;
+    z-index: 78;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 620px);
+}
+
+.order-payment-scrim {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    background: rgba(15, 23, 42, 0.48);
+    cursor: pointer;
+}
+
+.order-payment-sheet {
+    grid-column: 2;
+    grid-row: 1;
+    height: 100vh;
+    min-width: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    background: var(--app-bg, var(--filament-bg));
+    border-left: 1px solid var(--app-border, var(--filament-border));
+    box-shadow: -24px 0 48px rgba(15, 23, 42, 0.18);
+}
+
+.order-payment-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--app-border, var(--filament-border));
+    background: var(--app-surface, var(--filament-surface));
+}
+
+.order-payment-head h2 {
+    margin: 0.1rem 0 0.3rem;
+    font-size: 1.25rem;
+    line-height: 1.2;
+}
+
+.order-payment-head span {
+    color: var(--app-muted, var(--filament-muted));
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.order-payment-kicker {
+    margin: 0;
+    color: var(--app-primary, var(--filament-primary));
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.order-payment-scroll {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.order-payment-live-status {
+    margin-bottom: 1rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--app-border, var(--filament-border));
+    border-radius: var(--filament-radius);
+    background: var(--app-surface, var(--filament-surface));
+}
+
+.order-payment-live-status .stat-value {
+    margin: 0 0 0.35rem;
+}
+
+.order-payment-live-status .stat-desc {
+    margin: 0;
+    color: var(--app-muted, var(--filament-muted));
+}
+
+.order-catalog-panel .quick-order-shell {
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 1rem;
+}
+
+.order-catalog-panel .quick-product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(155px, 180px));
+    justify-content: start;
+}
+
+.order-catalog-panel .quick-product-card {
+    gap: 0.55rem;
+    padding: 0.65rem;
+}
+
+.order-catalog-panel .quick-product-media {
+    aspect-ratio: 1 / 0.78;
+}
+
+.order-catalog-panel .quick-product-copy {
+    min-height: 0;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.order-catalog-panel .quick-product-controls {
+    grid-template-columns: 38px minmax(44px, 1fr) 38px;
+    gap: 0.35rem;
+}
+
+.order-catalog-panel .quick-qty-button,
+.order-catalog-panel .quick-qty-input {
+    height: 38px;
+}
+
+.order-catalog-panel .quick-qty-button {
+    width: 38px;
+}
+
+.order-catalog-panel .quick-note-input {
+    min-height: 34px;
+}
+
+.order-ticket-panel .order-item-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
+}
+
+.order-ticket-panel .order-item-main {
+    align-items: flex-start;
+}
+
+.order-ticket-panel .order-item-thumb {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+}
+
+.order-ticket-panel .order-item-copy .flex.items-center {
+    align-items: flex-start;
+}
+
+.order-ticket-panel .action-stack {
+    width: 100%;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.order-ticket-panel .action-stack .button,
+.order-ticket-panel .action-stack form {
+    max-width: 100%;
+}
+
+.order-payment-sheet .panel {
+    overflow: visible;
+}
+
+.order-payment-sheet > .order-payment-scroll > .panel,
+.order-payment-sheet .order-payment-live-status {
+    box-shadow: none !important;
+}
+
+.order-payment-sheet .panel-header {
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.order-payment-sheet .panel-header .button,
+.order-payment-sheet .panel-header form {
+    flex-shrink: 0;
+}
+
+.order-payment-sheet .panel-body {
+    padding: 1rem !important;
+}
+
+.order-payment-sheet .split-command-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 0.6rem;
+    padding: 0.75rem;
+}
+
+.order-payment-sheet .split-command-bar > div:first-child {
+    min-width: 0;
+}
+
+.order-payment-sheet .split-command-bar select {
+    width: 100%;
+}
+
+.order-payment-sheet .split-command-metric {
+    min-width: 0;
+    padding: 0.55rem 0.65rem;
+}
+
+.order-payment-sheet .split-command-metric strong {
+    overflow-wrap: anywhere;
+}
+
+.order-payment-sheet .split-workbench {
+    grid-template-columns: 1fr;
+}
+
+.order-payment-sheet .split-roster {
+    position: static;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.order-payment-sheet .split-account-card {
+    min-width: 0;
+}
+
+.order-payment-sheet .split-board {
+    min-width: 0;
+}
+
+.order-payment-sheet .split-product-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.7rem;
+    padding: 0.75rem;
+}
+
+.order-payment-sheet .split-product-progress,
+.order-payment-sheet .split-chip-row {
+    min-width: 0;
+}
+
+.order-payment-sheet .split-person-chip {
+    max-width: min(100%, 150px);
+}
+
+.order-payment-sheet .split-active-controls {
+    grid-template-columns: minmax(42px, 1fr) minmax(54px, 0.8fr) minmax(42px, 1fr);
+    width: 100%;
+}
+
+.order-payment-sheet .split-active-controls .split-mini-button {
+    min-width: 0;
+}
+
+.order-payment-sheet [data-split-submit] {
+    width: 100%;
+    justify-content: center;
+}
+
+.order-payment-sheet .split-account-card.is-active {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14), 0 12px 26px rgba(37, 99, 235, 0.14);
+}
+
+.order-payment-sheet .split-account-card.is-active .split-account-select {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.order-payment-sheet .split-plus-button {
+    background: #2563eb;
+    border-color: #2563eb;
+}
+
+@media (min-width: 1180px) {
+    .order-ticket-panel {
+        position: sticky;
+        top: 1rem;
+        max-height: calc(100vh - 2rem);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .order-ticket-panel > .panel-body {
+        min-height: 0;
+        overflow-y: auto;
+    }
 }
 
 .split-product-meta {
@@ -4848,6 +5434,107 @@ body.theme-dark .tab-btn.active {
     }
 }
 
+@media (max-width: 1180px) {
+    .order-service-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .order-command-header {
+        flex-direction: column;
+    }
+
+    .order-command-actions {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .order-command-actions > .button,
+    .order-command-actions > form {
+        flex: 1 1 180px;
+    }
+
+    .order-command-actions form .button {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .order-status-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .order-catalog-panel .quick-order-shell {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .order-catalog-panel .quick-order-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .quick-client-bar {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 860px) {
+    .order-payment-drawer {
+        grid-template-columns: 1fr;
+    }
+
+    .order-payment-sheet {
+        grid-column: 1;
+        width: 100%;
+    }
+}
+
+@media (max-width: 760px) {
+    .order-title-block {
+        width: 100%;
+    }
+
+    .order-title-copy h1 {
+        font-size: 1.45rem;
+    }
+
+    .order-command-actions {
+        flex-direction: column;
+    }
+
+    .order-command-actions > .button,
+    .order-command-actions > form,
+    .order-command-actions form .button,
+    .order-ticket-header .button {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .order-status-strip {
+        grid-template-columns: 1fr;
+    }
+
+    .order-payment-scroll,
+    .order-payment-head {
+        padding: 0.85rem;
+    }
+
+    .order-catalog-panel .quick-product-grid,
+    .order-payment-sheet .split-command-bar,
+    .order-payment-sheet .split-roster {
+        grid-template-columns: 1fr;
+    }
+
+    .order-catalog-panel .quick-product-grid {
+        justify-content: stretch;
+    }
+
+    .order-catalog-panel .quick-product-card {
+        max-width: none;
+    }
+
+    .quick-service-mode {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* =========================================
    9. UTILIDADES EXTRA DE LAYOUT (FLEX & GRID)
    ========================================= */
@@ -6657,6 +7344,10 @@ button {
 
 .content-wrapper,
 .filament-dashboard,
+.order-workspace,
+.order-command-header,
+.order-service-grid,
+.order-payment-sheet,
 .panel,
 .panel-body,
 .page-header,

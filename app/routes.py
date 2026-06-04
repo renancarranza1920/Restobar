@@ -2467,6 +2467,10 @@ def detalle_orden(order_id):
         can_prepare=user_can(current_user, "cocina"),
         can_deliver=user_can(current_user, "ordenes"),
         division_locked=any(division.pagada for division in order.divisiones),
+        payment_drawer_open=(
+            bool_from_form(request.args.get("split"))
+            or bool_from_form(request.args.get("cobro"))
+        ),
     )
 
 
@@ -2694,6 +2698,16 @@ def agregar_item_orden(order_id):
 
     product_ids = request.form.getlist("product_ids")
     selected_lines = []
+    quick_split_enabled = bool_from_form(request.form.get("quick_split_enabled"))
+    quick_split_people = parse_int(request.form.get("quick_split_people_count"), 0)
+    split_capacity = order_split_capacity(order)
+    if quick_split_enabled:
+        if split_capacity < 2:
+            flash("Esta mesa no tiene suficientes sillas para dividir desde la venta.", "error")
+            return redirect(url_for("web.detalle_orden", order_id=order.id))
+        quick_split_people = max(2, min(split_capacity, quick_split_people or 2))
+    else:
+        quick_split_people = 0
 
     if product_ids:
         seen_product_ids = set()
@@ -2703,7 +2717,18 @@ def agregar_item_orden(order_id):
                 continue
             seen_product_ids.add(product_id)
 
-            quantity = parse_int(request.form.get(f"quantity_{product_id}"), 0)
+            person_assignments = {}
+            if quick_split_enabled:
+                for person in range(1, quick_split_people + 1):
+                    person_quantity = parse_int(
+                        request.form.get(f"quantity_{product_id}_person_{person}"),
+                        0,
+                    )
+                    if person_quantity > 0:
+                        person_assignments[person] = person_quantity
+                quantity = sum(person_assignments.values())
+            else:
+                quantity = parse_int(request.form.get(f"quantity_{product_id}"), 0)
             if quantity <= 0:
                 continue
 
@@ -2717,6 +2742,7 @@ def agregar_item_orden(order_id):
                     "product": product,
                     "quantity": quantity,
                     "notes": (request.form.get(f"notes_{product_id}") or "").strip(),
+                    "assignments": person_assignments,
                 }
             )
     else:
@@ -2732,7 +2758,7 @@ def agregar_item_orden(order_id):
             flash("La cantidad debe ser mayor que cero.", "error")
             return redirect(url_for("web.detalle_orden", order_id=order.id))
 
-        selected_lines.append({"product": product, "quantity": quantity, "notes": notes})
+        selected_lines.append({"product": product, "quantity": quantity, "notes": notes, "assignments": {}})
 
     if not selected_lines:
         flash("Selecciona al menos un producto para agregar.", "error")
@@ -2743,25 +2769,69 @@ def agregar_item_orden(order_id):
         flash(stock_errors[0], "error")
         return redirect(url_for("web.detalle_orden", order_id=order.id))
 
-    changed, message = reset_divisiones_if_possible(order)
-    if message:
-        flash(message, "info" if changed else "error")
-        if not changed and order.divisiones:
-            return redirect(url_for("web.detalle_orden", order_id=order.id))
+    assignment_map = {}
+    split_labels = {}
+    if quick_split_enabled:
+        for person in range(1, quick_split_people + 1):
+            split_labels[person] = (
+                request.form.get(f"quick_label_{person}")
+                or next(
+                    (
+                        division.etiqueta or ""
+                        for division in order.divisiones
+                        if division.numero_persona == person
+                    ),
+                    "",
+                )
+            ).strip()
+
+        for item in order.items_activos:
+            assigned_total = 0
+            for division_item in item.division_items:
+                division = division_item.division
+                if not division or division.numero_persona > quick_split_people:
+                    continue
+                qty = parse_int(division_item.cantidad, 0)
+                if qty <= 0:
+                    continue
+                assignment_map[(item.id, division.numero_persona)] = (
+                    assignment_map.get((item.id, division.numero_persona), 0) + qty
+                )
+                assigned_total += qty
+
+            if assigned_total < item.cantidad:
+                assignment_map[(item.id, 1)] = (
+                    assignment_map.get((item.id, 1), 0) + (item.cantidad - assigned_total)
+                )
+    else:
+        changed, message = reset_divisiones_if_possible(order)
+        if message:
+            flash(message, "info" if changed else "error")
+            if not changed and order.divisiones:
+                return redirect(url_for("web.detalle_orden", order_id=order.id))
 
     merged_lines = 0
+    added_items = []
     for line in selected_lines:
         product = line["product"]
-        _, merged = add_or_increment_order_item(
+        item, merged = add_or_increment_order_item(
             order,
             product,
             line["quantity"],
             line["notes"],
         )
+        added_items.append((item, line))
         if merged:
             merged_lines += 1
 
     db.session.flush()
+
+    if quick_split_enabled:
+        for item, line in added_items:
+            for person, qty in line.get("assignments", {}).items():
+                assignment_map[(item.id, person)] = assignment_map.get((item.id, person), 0) + qty
+        save_split_configuration(order, quick_split_people, split_labels, assignment_map)
+
     sync_order(order)
     audit_event(
         "agregar_items",
@@ -2789,6 +2859,15 @@ def agregar_item_orden(order_id):
             flash(f"Se agregaron {len(selected_lines)} productos ({total_units} unidades), sumando repetidos.", "success")
         else:
             flash(f"Se agregaron {len(selected_lines)} productos ({total_units} unidades).", "success")
+    if quick_split_enabled:
+        return redirect(
+            url_for(
+                "web.detalle_orden",
+                order_id=order.id,
+                split=1,
+                personas=quick_split_people,
+            )
+        )
     return redirect(url_for("web.detalle_orden", order_id=order.id))
 
 

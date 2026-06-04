@@ -957,6 +957,25 @@ def bootstrap_table_layout_schema():
     if inspector.has_table("ordenes") and not inspector.has_table("orden_mesas"):
         OrdenMesa.__table__.create(db.engine)
 
+    if inspector.has_table("ordenes") and inspector.has_table("orden_mesas"):
+        db.session.execute(
+            text(
+                """
+                INSERT INTO orden_mesas (orden_id, mesa_id, created_at)
+                SELECT ordenes.id, ordenes.mesa_id, ordenes.created_at
+                FROM ordenes
+                WHERE ordenes.mesa_id IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM orden_mesas
+                      WHERE orden_mesas.orden_id = ordenes.id
+                        AND orden_mesas.mesa_id = ordenes.mesa_id
+                  )
+                """
+            )
+        )
+        db.session.commit()
+
     if inspector.has_table("pagos"):
         payment_columns = {column["name"] for column in inspector.get_columns("pagos")}
         if "propina" not in payment_columns:
@@ -1865,9 +1884,28 @@ def ensure_order_table_link(order, mesa=None):
     mesa = mesa or order.mesa
     if not order or not mesa:
         return None
+
+    order_id = getattr(order, "id", None)
+    mesa_id = getattr(mesa, "id", None)
+
     for link in order.mesas_unidas:
-        if link.mesa_id == mesa.id:
+        if link.mesa_id == mesa_id or (link.mesa and link.mesa.id == mesa_id):
             return link
+
+    for pending in db.session.new:
+        if not isinstance(pending, OrdenMesa):
+            continue
+        pending_order_id = pending.orden_id or (pending.orden.id if pending.orden else None)
+        pending_mesa_id = pending.mesa_id or (pending.mesa.id if pending.mesa else None)
+        if pending_order_id == order_id and pending_mesa_id == mesa_id:
+            return pending
+
+    if order_id and mesa_id:
+        with db.session.no_autoflush:
+            existing = OrdenMesa.query.filter_by(orden_id=order_id, mesa_id=mesa_id).first()
+        if existing is not None:
+            return existing
+
     link = OrdenMesa(orden=order, mesa=mesa)
     db.session.add(link)
     return link
