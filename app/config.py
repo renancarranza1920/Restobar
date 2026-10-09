@@ -36,8 +36,15 @@ class Config:
     TAKEOUT_TABLE_NUMBER = int(getenv("TAKEOUT_TABLE_NUMBER", "999"))
     TAKEOUT_TABLE_ALIAS = getenv("TAKEOUT_TABLE_ALIAS", "Para llevar")
     TAKEOUT_ZONE_NAME = getenv("TAKEOUT_ZONE_NAME", "Sistema")
-    # Draft preparation only. Transmission and production are intentionally absent.
+    # Sandbox integration only, opt-in after secure credential configuration.
     DTE_SCHEMA_PATH = getenv("DTE_SCHEMA_PATH")
+    DTE_TRANSMISSION_ENABLED = env_flag("DTE_TRANSMISSION_ENABLED", "0")
+    DTE_ENVIRONMENT = getenv("DTE_ENVIRONMENT", "00")
+    DTE_API_USER = getenv("DTE_API_USER", "")
+    DTE_API_PASSWORD = getenv("DTE_API_PASSWORD", "")
+    DTE_SIGNER_PASSWORD = getenv("DTE_SIGNER_PASSWORD", "")
+    DTE_SIGNER_URL = getenv("DTE_SIGNER_URL", "http://127.0.0.1:8113/firmardocumento/")
+    DTE_TIMEOUT_SECONDS = 8
     PRODUCT_UPLOAD_DIR = BASE_DIR / "app" / "static" / "uploads" / "products"
     BRANDING_UPLOAD_DIR = BASE_DIR / "app" / "static" / "uploads" / "branding"
 

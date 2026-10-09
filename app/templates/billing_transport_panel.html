@@ -1,0 +1,35 @@
+<section class="panel">
+  <div class="panel-header"><h2 class="panel-title">Conexión con Hacienda</h2><span class="billing-badge">Ambiente de pruebas 00</span></div>
+  <div class="panel-body">
+    <p class="text-muted">Las pruebas no tienen validez tributaria. El borrador original se conserva; la firma y la respuesta de Hacienda se guardan por separado.</p>
+    {% if legacy %}<p class="billing-warning">Este documento usa un esquema anterior. Puede consultarse y descargarse, pero no firmarse ni transmitirse.</p>
+    {% else %}
+      {% if fiscal_envio %}
+      <div class="billing-facts"><div><span>Estado de integración</span><strong>{{ fiscal_envio.estado|replace('_', ' ') }}</strong></div><div><span>Solicitudes de recepción</span><strong>{{ fiscal_envio.transmisiones }}</strong></div></div>
+      <p>{{ fiscal_envio.mensaje or 'Todavía no se ha enviado una solicitud de recepción.' }}</p>
+      {% endif %}
+      {% if fiscal_accepted %}
+        <div class="billing-warning">Recepción confirmada en pruebas. Este documento sigue sin validez tributaria.</div>
+        <dl class="billing-facts"><div><dt>Sello de recepción de prueba</dt><dd class="billing-code">{{ fiscal_envio.sello }}</dd></div><div><dt>Procesamiento MH</dt><dd>{{ fiscal_receipt.get('fhProcesamiento', '—') }}</dd></div></dl>
+        {% if fiscal_receipt.get('observaciones') %}<p>Observaciones de Hacienda:</p><ul>{% for warning in fiscal_receipt.observaciones %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
+        <div class="billing-transport-actions"><a class="button button-primary" href="{{ url_for('fiscal.download_test_receipt', document_id=document.id) }}"><i class="fa-solid fa-download" aria-hidden="true"></i> Descargar JSON firmado de prueba</a><a class="button button-ghost" target="_blank" rel="noopener noreferrer" href="{{ fiscal_qr_url }}">Consultar recepción en MH <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a></div>
+      {% else %}
+        {% for reason in fiscal_readiness.reasons %}<p class="text-muted">{{ reason }}</p>{% endfor %}
+        {% if user_can(current_user, 'facturacion.send_test') %}
+          {% if not fiscal_envio or fiscal_envio.transmisiones == 0 %}
+          <form method="post" action="{{ url_for('fiscal.transmit_test', document_id=document.id) }}">
+            <input type="hidden" name="billing_csrf" value="{{ billing_csrf_token() }}">
+            <label class="billing-check"><input type="checkbox" name="confirmar_prueba" value="1" required {% if not fiscal_readiness.enabled %}disabled{% endif %}><span>Confirmo que enviaré este documento únicamente al ambiente de pruebas.</span></label>
+            <div class="billing-transport-actions"><button class="button button-primary" type="submit" {% if not fiscal_readiness.enabled %}disabled{% endif %}><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Firmar y transmitir prueba</button></div>
+          </form>
+          {% else %}
+          <form method="post" action="{{ url_for('fiscal.consult_test', document_id=document.id) }}"><input type="hidden" name="billing_csrf" value="{{ billing_csrf_token() }}"><button class="button button-primary" type="submit" {% if not fiscal_readiness.enabled %}disabled{% endif %}><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Consultar recepción de prueba</button></form>
+          <p class="text-muted">Una respuesta incierta se resuelve consultando el mismo código de generación. Esta aplicación no vuelve a enviarlo automáticamente.</p>
+          {% endif %}
+        {% endif %}
+      {% endif %}
+      {% if fiscal_receipt and not fiscal_accepted %}<p>{{ fiscal_receipt.get('descripcionMsg', '') }}</p>{% for warning in fiscal_receipt.get('observaciones') or [] %}<p>{{ warning }}</p>{% endfor %}{% endif %}
+      {% if fiscal_attempts %}<details><summary>Historial de integración</summary><ol>{% for attempt in fiscal_attempts %}<li>{{ attempt.created_at|datetime_short }} · {{ attempt.etapa }} · {{ attempt.resultado }}<br>{{ attempt.mensaje }}</li>{% endfor %}</ol></details>{% endif %}
+    {% endif %}
+  </div>
+</section>

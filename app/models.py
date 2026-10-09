@@ -164,6 +164,40 @@ class DocumentoFiscal(db.Model):
     usuario = db.relationship("Usuario", lazy=True)
 
 
+class FiscalEnvio(db.Model):
+    """Transmission evidence kept separately from the immutable draft."""
+
+    __tablename__ = "fiscales_envios"
+
+    id = db.Column(db.Integer, primary_key=True)
+    documento_id = db.Column(db.Integer, db.ForeignKey("documentos_fiscales.id"), unique=True, nullable=False)
+    estado = db.Column(db.String(24), default="NUEVO", nullable=False)
+    firma = db.Column(db.Text().with_variant(LONGTEXT(), "mysql"))
+    sello = db.Column(db.String(100))
+    respuesta_json = db.Column(db.Text().with_variant(LONGTEXT(), "mysql"))
+    mensaje = db.Column(db.String(500))
+    transmisiones = db.Column(db.Integer, default=0, nullable=False)
+    ocupado_hasta = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    documento = db.relationship("DocumentoFiscal", lazy=True)
+
+
+class FiscalIntento(db.Model):
+    """Append-only, sanitized record; never stores authentication secrets."""
+
+    __tablename__ = "fiscales_intentos"
+
+    id = db.Column(db.Integer, primary_key=True)
+    envio_id = db.Column(db.Integer, db.ForeignKey("fiscales_envios.id"), nullable=False, index=True)
+    etapa = db.Column(db.String(20), nullable=False)
+    resultado = db.Column(db.String(24), nullable=False)
+    mensaje = db.Column(db.String(500))
+    respuesta_json = db.Column(db.Text().with_variant(LONGTEXT(), "mysql"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
 class AuditLog(db.Model):
     __tablename__ = "audit_logs"
 

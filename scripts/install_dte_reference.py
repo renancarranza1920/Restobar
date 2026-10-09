@@ -1,55 +1,45 @@
-"""Install a pinned, checksum verified DTE preparation reference locally.
+"""Verify the bundled official MH schemas offline, with optional verified copy.
 
-No tax documents, credentials or taxpayer information are sent. Normal HTTPS
-certificate verification and inherited proxy settings remain enabled.
+The source is the ZIP supplied by the user from factura.gob.sv. No remote
+reference is downloaded, and no credentials or taxpayer data are required.
 """
 
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
-import tempfile
-import urllib.request
+import shutil
+
+from jsonschema import Draft7Validator
 
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def install(destination):
+def install(destination=None):
     metadata = json.loads((ROOT / "app/schemas/dte-reference.json").read_text())
-    if destination.is_file():
-        if hashlib.sha256(destination.read_bytes()).hexdigest() == metadata["sha256"]:
-            print("Referencia DTE instalada y checksum correcto.")
-            return
-        raise RuntimeError("La referencia existente no coincide. Revísala antes de reemplazarla.")
-    with urllib.request.urlopen(metadata["download_url"], timeout=45) as response:
-        content = response.read(1024 * 1024 + 1)
-    if len(content) > 1024 * 1024:
-        raise RuntimeError("La descarga excede el tamaño permitido.")
-    if hashlib.sha256(content).hexdigest() != metadata["sha256"]:
-        raise RuntimeError("Checksum incorrecto: no se instalará la referencia.")
-    parsed = json.loads(content)
-    if parsed["properties"]["identificacion"]["properties"]["version"]["const"] != 1:
-        raise RuntimeError("Versión inesperada.")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as handle:
-        handle.write(content)
-        temporary = Path(handle.name)
-    try:
-        os.chmod(temporary, 0o600)
-        temporary.replace(destination)
-    finally:
-        temporary.unlink(missing_ok=True)
-    print("Referencia DTE v1 instalada y checksum verificado. Vigencia oficial pendiente.")
+    for reference in metadata["schemas"].values():
+        source = ROOT / "app/schemas" / reference["path"]
+        content = source.read_bytes()
+        if hashlib.sha256(content).hexdigest() != reference["sha256"]:
+            raise RuntimeError(f"Checksum incorrecto en {source.name}.")
+        Draft7Validator.check_schema(json.loads(content))
+        if destination:
+            destination.mkdir(parents=True, exist_ok=True)
+            target = destination / source.name
+            if target.exists() and target.read_bytes() != content:
+                raise RuntimeError(f"{target.name} ya existe y tiene otros bytes; revísalo antes de reemplazarlo.")
+            if not target.exists():
+                shutil.copyfile(source, target)
+        print(f"{reference['name']} v{reference['version']}: esquema oficial incluido, SHA-256 correcto.")
+    return metadata
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--destination", type=Path,
-                        default=ROOT / "instance/dte-schemas/dte-fe-v1.json")
+    parser.add_argument("--destination", type=Path, help="Directorio opcional para copiar los esquemas verificados.")
     args = parser.parse_args()
     try:
-        install(args.destination.resolve())
+        install(args.destination.resolve() if args.destination else None)
     except Exception as error:
-        parser.exit(1, f"No se pudo instalar la referencia DTE: {error}\n")
+        parser.exit(1, f"No se pudo verificar la referencia DTE: {error}\n")

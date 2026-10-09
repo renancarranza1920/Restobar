@@ -1,0 +1,18 @@
+{% macro activity(prefix, values, required=false) %}
+<div class="billing-field"><label for="{{ prefix }}-activity">Actividad económica · CAT-019</label><input id="{{ prefix }}-activity" name="codActividad" list="fiscal-activities" value="{{ values.get('codActividad', '') }}" maxlength="6" data-activity-input {% if required %}required{% endif %}><small>Busca el código de tu inscripción; se valida con el catálogo de Hacienda.</small></div>
+<div class="billing-field"><label for="{{ prefix }}-activity-description">Descripción de actividad</label><input id="{{ prefix }}-activity-description" name="descActividad" value="{{ values.get('descActividad', '') }}" maxlength="150" data-activity-description {% if required %}required{% endif %}></div>
+{% endmacro %}
+{% macro address(prefix, values, required=false) %}
+<div class="billing-form-grid billing-field-wide" data-fiscal-address>
+    <div class="billing-field"><label for="{{ prefix }}-department">Departamento</label><select id="{{ prefix }}-department" name="departamento" data-fiscal-department {% if required %}required{% endif %}><option value="">Selecciona un departamento</option>{% for option in fiscal_catalog_options('CAT-012') %}<option value="{{ option.code }}" {% if values.get('departamento') == option.code %}selected{% endif %}>{{ option.label|title }}</option>{% endfor %}</select></div>
+    <div class="billing-field"><label for="{{ prefix }}-municipality">Municipio · 44 municipios</label><select id="{{ prefix }}-municipality" name="municipio" data-fiscal-municipality {% if required %}required{% endif %}><option value="">Selecciona un municipio</option>{% for option in municipality_options(values.get('departamento', '')) %}<option value="{{ option.code }}" {% if values.get('municipio') == option.code %}selected{% endif %}>{{ option.label|title }}</option>{% endfor %}</select></div>
+    <div class="billing-field"><label for="{{ prefix }}-district">Distrito</label><select id="{{ prefix }}-district" name="distrito" data-fiscal-district {% if required %}required{% endif %}><option value="">Selecciona tu distrito</option>{% for option in district_options(values.get('departamento', '')) %}<option value="{{ option.code }}" {% if values.get('distrito') == option.code %}selected{% endif %}>{{ option.label|title }}</option>{% endfor %}</select><small>Elige el distrito de tu dirección; el catálogo lo agrupa por departamento.</small></div>
+    <div class="billing-field"><label for="{{ prefix }}-address">Dirección del establecimiento</label><input id="{{ prefix }}-address" name="complemento" value="{{ values.get('complemento', '') }}" maxlength="200" autocomplete="street-address" {% if required %}required{% endif %}></div>
+</div>
+{% endmacro %}
+{% macro supporting_data() %}
+<datalist id="fiscal-activities">{% for option in fiscal_catalog_options('CAT-019') %}<option value="{{ option.code }}">{{ option.label }}</option>{% endfor %}</datalist>
+<script type="application/json" id="fiscal-geography-data">{{ fiscal_geography|tojson }}</script>
+<script type="application/json" id="fiscal-activity-data">{{ fiscal_catalog_options('CAT-019')|tojson }}</script>
+<script src="{{ url_for('static', filename='billing-form.js') }}" defer></script>
+{% endmacro %}

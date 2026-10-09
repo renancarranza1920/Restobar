@@ -1,7 +1,6 @@
 """Fiscal boundary and concurrency regressions on disposable local databases.
 
-Install the pinned reference with scripts/install_dte_reference.py before running
-these tests. Its bytes are copied to a temporary location; no network requests or
+Bundled official schema bytes are copied to a temporary location; no network requests or
 production database connections are made by this suite.
 """
 
@@ -24,6 +23,10 @@ from app.billing import (
     load_schema,
     prepare_document,
     recipient_from_form,
+    verified_payload,
+    validate_current_payload,
+    build_payload,
+    _validate_standard_arithmetic,
 )
 from app.config import Config
 from app.extensions import db
@@ -42,13 +45,11 @@ from app.models import (
 )
 
 
-REFERENCE_PATH = Path(__file__).resolve().parents[1] / "instance/dte-schemas/dte-fe-v1.json"
+REFERENCE_PATH = Path(__file__).resolve().parents[1] / "app/schemas/official/fe-f-v2.json"
 
 
 class FiscalBoundaryTests(unittest.TestCase):
     def setUp(self):
-        if not REFERENCE_PATH.is_file():
-            self.skipTest("Install the pinned DTE reference with scripts/install_dte_reference.py.")
         self.scratch = TemporaryDirectory(prefix="restobar-fiscal-boundaries-")
         self.addCleanup(self.scratch.cleanup)
         root = Path(self.scratch.name)
@@ -70,7 +71,7 @@ class FiscalBoundaryTests(unittest.TestCase):
         self.profile = {
             "nit": "06141212121012", "nrc": "1234567", "nombre": "RESTAURANTE DE PRUEBA",
             "nombreComercial": "Restobar Pruebas", "codActividad": "56101",
-            "descActividad": "Restaurantes de prueba", "departamento": "06", "municipio": "14",
+            "descActividad": "Restaurantes de prueba", "departamento": "06", "municipio": "23", "distrito": "14",
             "complemento": "Dirección de prueba local", "telefono": "22223333",
             "correo": "pruebas@example.com", "codEstable": "M001", "codPuntoVenta": "P001",
             "codEstableMH": "", "codPuntoVentaMH": "", "tipoEstablecimiento": "02",
@@ -152,7 +153,7 @@ class FiscalBoundaryTests(unittest.TestCase):
                 with self.subTest(recipient_department=department), self.assertRaises(BillingError):
                     recipient_from_form({
                         "nombre": "Cliente", "departamento": department,
-                        "municipio": "01", "complemento": "Dirección de prueba",
+                        "municipio": "23", "distrito": "14", "complemento": "Dirección de prueba",
                     }, Decimal("12.50"))
 
     def test_modified_reference_fails_integrity_after_initial_validation(self):
@@ -199,3 +200,165 @@ class FiscalBoundaryTests(unittest.TestCase):
         with self.app.app_context():
             self.assertEqual(DocumentoFiscal.query.count(), 2)
             self.assertEqual(SecuenciaBorradorDTE.query.one().siguiente, 2)
+
+
+    def test_municipality_and_district_are_official_and_department_coupled(self):
+        with self.app.app_context():
+            for update in ({"municipio": "14"}, {"municipio": "99"}, {"distrito": "99"}, {"departamento": "01"}):
+                with self.subTest(update=update), self.assertRaises(BillingError):
+                    issuer_from_profile({**self.profile, **update})
+
+    def test_ccf_rounding_retains_body_precision_and_reconciles_aggregate_tax(self):
+        order_id = self.paid_order()
+        with self.app.app_context():
+            order = db.session.get(Orden, order_id)
+            order.items[0].precio_unitario = Decimal("11.30")
+            order.items[0].cantidad = 2
+            order.items.append(OrdenItem(producto_id=self.product_id, cantidad=1,
+                                       precio_unitario=Decimal("0.05"), estado="entregado", pagado=True))
+            order.total = Decimal("22.65")
+            order.pagos[0].monto = Decimal("22.65")
+            db.session.commit()
+            form = {"nombre": "Cliente CCF", "tipo_dte": "03", "operacion_estandar": "1",
+                    "nit": "06141212121012", "nrc": "1234567", "codActividad": "56101",
+                    "descActividad": "Restaurantes de prueba", "departamento": "06", "municipio": "23",
+                    "distrito": "14", "complemento": "Dirección de prueba"}
+            document, _ = prepare_document(order, form, self.admin_id)
+            payload = verified_payload(document)
+            validate_current_payload(payload)
+            base = sum(line["ventaGravada"] for line in payload["cuerpoDocumento"])
+            iva = payload["resumen"]["tributos"][0]["valor"]
+            self.assertEqual(base, Decimal("20.04424779"))
+            self.assertEqual(payload["resumen"]["totalGravada"], Decimal("20.04"))
+            self.assertEqual(iva, amount(base * Decimal("0.13")))
+            self.assertEqual(amount(base) + iva, Decimal("22.65"))
+            self.assertEqual(payload["resumen"]["totalPagar"], Decimal("22.65"))
+            for line in payload["cuerpoDocumento"]:
+                self.assertLessEqual(abs(line["precioUni"] * line["cantidad"] - line["ventaGravada"]), Decimal("0.01"))
+
+    def test_ccf_four_cent_total_is_valid_with_unrounded_item_base(self):
+        order_id = self.paid_order()
+        with self.app.app_context():
+            order = db.session.get(Orden, order_id)
+            order.items[0].precio_unitario = order.total = order.pagos[0].monto = Decimal("0.04")
+            db.session.commit()
+            form = {"nombre": "Cliente CCF", "tipo_dte": "03", "operacion_estandar": "1",
+                    "nit": "06141212121012", "nrc": "1234567", "codActividad": "56101",
+                    "descActividad": "Restaurantes de prueba", "departamento": "06", "municipio": "23",
+                    "distrito": "14", "complemento": "Dirección de prueba"}
+            document, _ = prepare_document(order, form, self.admin_id)
+            payload = verified_payload(document)
+            validate_current_payload(payload)
+            self.assertEqual(payload["cuerpoDocumento"][0]["ventaGravada"], Decimal("0.03539823"))
+            self.assertEqual(payload["resumen"]["totalGravada"], Decimal("0.04"))
+            self.assertEqual(payload["resumen"]["tributos"][0]["valor"], Decimal("0.00"))
+            self.assertEqual(payload["resumen"]["totalPagar"], Decimal("0.04"))
+            self.assertEqual(db.session.get(Orden, order_id).total, Decimal("0.04"))
+
+
+    def test_fe_preserves_eight_decimal_item_vat_before_rounding_summary(self):
+        for gross_unit, expected_vat in ((Decimal("0.04"), Decimal("0.09")), (Decimal("0.10"), Decimal("0.23"))):
+            order_id = self.paid_order()
+            with self.subTest(gross_unit=gross_unit), self.app.app_context():
+                order = db.session.get(Orden, order_id)
+                order.items[0].precio_unitario = gross_unit
+                for _ in range(19):
+                    order.items.append(OrdenItem(producto_id=self.product_id, cantidad=1,
+                                               precio_unitario=gross_unit, estado="entregado", pagado=True))
+                order.total = order.pagos[0].monto = gross_unit * 20
+                db.session.commit()
+                document, _ = prepare_document(order, {"nombre": "Cliente", "operacion_estandar": "1"}, self.admin_id)
+                payload = verified_payload(document)
+                validate_current_payload(payload)
+                vat_items = [line["ivaItem"] for line in payload["cuerpoDocumento"]]
+                self.assertEqual(len(vat_items), 20)
+                self.assertTrue(all(value.as_tuple().exponent == -8 for value in vat_items))
+                self.assertEqual(payload["resumen"]["totalIva"], expected_vat)
+                self.assertEqual(document.iva, expected_vat)
+                self.assertEqual(payload["resumen"]["totalIva"], amount(sum(vat_items)))
+                self.assertEqual(payload["resumen"]["totalPagar"], gross_unit * 20)
+
+
+    def test_ccf_large_quantity_cannot_exceed_one_cent_line_arithmetic_tolerance(self):
+        order_id = self.paid_order()
+        with self.app.app_context():
+            order = db.session.get(Orden, order_id)
+            order.items[0].precio_unitario = Decimal("0.01")
+            order.items[0].cantidad = 99_999_999
+            order.total = order.pagos[0].monto = Decimal("999999.99")
+            db.session.commit()
+            form = {"nombre": "Cliente CCF", "tipo_dte": "03", "operacion_estandar": "1",
+                    "nit": "06141212121012", "nrc": "1234567", "codActividad": "56101",
+                    "descActividad": "Restaurantes de prueba", "departamento": "06", "municipio": "23",
+                    "distrito": "14", "complemento": "Dirección de prueba"}
+            with self.assertRaisesRegex(BillingError, "ocho decimales"):
+                prepare_document(order, form, self.admin_id)
+            db.session.rollback()
+            self.assertEqual(db.session.get(Orden, order_id).total, Decimal("999999.99"))
+            self.assertEqual(DocumentoFiscal.query.count(), 0)
+
+    def test_schema_valid_but_incorrect_fe_vat_cannot_be_signed(self):
+        order_id = self.paid_order()
+        with self.app.app_context():
+            order = db.session.get(Orden, order_id)
+            order.items[0].precio_unitario = order.total = order.pagos[0].monto = Decimal("0.10")
+            db.session.commit()
+            document, _ = prepare_document(order, {"nombre": "Cliente", "operacion_estandar": "1"}, self.admin_id)
+            payload = verified_payload(document)
+            payload["cuerpoDocumento"][0]["ivaItem"] = Decimal("0.01")
+            payload["resumen"]["totalIva"] = Decimal("0.01")
+            # Both numbers remain allowed by the official schema; fiscal math
+            # provides a separate check before any signing or transmission.
+            from app.billing import validate_schema
+            validate_schema(payload)
+            with self.assertRaisesRegex(BillingError, "cálculos"):
+                validate_current_payload(payload)
+
+
+    def test_fractional_order_quantities_are_rejected_by_the_integer_product_workflow(self):
+        order_id = self.paid_order()
+        with self.app.app_context():
+            order = db.session.get(Orden, order_id)
+            order.items[0].cantidad = 1.5
+            order.total = order.pagos[0].monto = Decimal("18.75")
+            db.session.commit()
+            for kind in ("01", "03"):
+                with self.subTest(kind=kind), self.assertRaisesRegex(BillingError, "cantidades enteras"):
+                    prepare_document(order, {"nombre": "Cliente", "operacion_estandar": "1", "tipo_dte": kind}, self.admin_id)
+                db.session.rollback()
+            self.assertEqual(DocumentoFiscal.query.count(), 0)
+
+
+    def test_ccf_cent_totals_and_multiline_splits_reconcile_from_one_cent_to_100_dollars(self):
+        from datetime import datetime
+        from uuid import uuid4
+        issued_at = datetime(2026, 10, 9, 12, 0, 0)
+        generation_code = str(uuid4()).upper()
+        with self.app.app_context():
+            issuer = issuer_from_profile(self.profile, "03")
+            recipient = recipient_from_form({
+                "nombre": "Cliente CCF", "nit": "06141212121012", "nrc": "1234567",
+                "codActividad": "56101", "descActividad": "Restaurantes de prueba",
+                "departamento": "06", "municipio": "23", "distrito": "14",
+                "complemento": "Dirección de prueba",
+            }, Decimal("1.00"), "03")
+            for cents in range(1, 10_001):
+                gross = Decimal(cents) / 100
+                for parts in ([cents], [cents // 3, cents // 3, cents - 2 * (cents // 3)]):
+                    lines = [{"product_id": self.product_id, "description": "Producto de prueba", "quantity": 1,
+                              "unit_price": Decimal(part) / 100, "total": Decimal(part) / 100}
+                             for part in parts if part]
+                    snapshot = {"total": gross, "lines": lines,
+                                "payments": [{"fiscal_payment_code": "01", "amount": gross}]}
+                    payload = build_payload(snapshot, issuer, recipient, cents, generation_code, issued_at, "03")
+                    _validate_standard_arithmetic(payload)
+                    summary = payload["resumen"]
+                    self.assertEqual(summary["totalGravada"] + summary["tributos"][0]["valor"], gross,
+                                     f"cents={cents}, parts={parts}")
+                    self.assertEqual(summary["totalPagar"], gross)
+                    self.assertEqual(summary["totalGravada"], amount(sum(line["ventaGravada"] for line in payload["cuerpoDocumento"])))
+                    for line in payload["cuerpoDocumento"]:
+                        self.assertLessEqual(abs(line["precioUni"] * line["cantidad"] - line["ventaGravada"]), Decimal("0.01"))
+                    if cents in {1, 4, 100, 10_000}:
+                        validate_current_payload(payload)
+            self.assertEqual(summary["totalPagar"], Decimal("100.00"))

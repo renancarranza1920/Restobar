@@ -1,10 +1,39 @@
 {
-  "document": "Factura consumidor final, tipo 01, versión 1",
-  "schema_version": 1,
   "official_information_page": "https://factura.gob.sv/",
-  "mirror_repository": "https://github.com/herson/dte-json-schemas",
-  "mirror_commit": "01c62d14dc1126129e45ad282fca5ab18e8e7c6f",
-  "download_url": "https://raw.githubusercontent.com/herson/dte-json-schemas/01c62d14dc1126129e45ad282fca5ab18e8e7c6f/DTE-FE-v1.json",
-  "sha256": "748673c0f2d45d84e6b13a21d2ba411eb731ce199eb946dc33ca9b995571f0c1",
-  "status": "Referencia comunitaria atribuida a MH; vigencia oficial pendiente de verificar. No se redistribuyen sus bytes en este repositorio."
+  "source": {
+    "kind": "user-provided MH download",
+    "artifact": "svfe-json-schemas (1).zip",
+    "sha256": "8587a7d679b22f875d1fb37be7a218c6b9ca499caa80a646e6894a4d6116ab64"
+  },
+  "status": "Esquemas de Hacienda aportados por el usuario. Se conservan los bytes originales; habilitación, pruebas y vigencia de producción deben confirmarse con MH.",
+  "schemas": {
+    "01": {
+      "name": "Factura",
+      "version": 2,
+      "path": "official/fe-f-v2.json",
+      "source_path": "v2/fe-f-v2.json",
+      "sha256": "2887ff3ccf5594eb1f49dcec1ce8bba134a86462f900069de1365d18ff997aff"
+    },
+    "03": {
+      "name": "Comprobante de Crédito Fiscal",
+      "version": 4,
+      "path": "official/fe-ccf-v4.json",
+      "source_path": "v4/fe-ccf-v4.json",
+      "sha256": "2c2db8b3f6144bdd0d128ec2babecd38f277f8493458a06cf1b2be7b816fba32"
+    },
+    "invalidacion": {
+      "name": "Invalidación",
+      "version": 3,
+      "path": "official/invalidacion-schema-v3.json",
+      "source_path": "v3/invalidacion-schema-v3.json",
+      "sha256": "1ce117cb01b59da309dcbb237cc011e0c4539b3effe9cdd3c2b7794ea631693a"
+    },
+    "contingencia": {
+      "name": "Contingencia",
+      "version": 4,
+      "path": "official/contingencia-schema-v4.json",
+      "source_path": "v4/contingencia-schema-v4.json",
+      "sha256": "03fc357397dc7aaa4a8b44f887497dd1ead3a04eb71ec043bb2c0cda485bb149"
+    }
+  }
 }

@@ -136,6 +136,7 @@ PERMISSION_DEFINITIONS = [
     {"key": "facturacion.view", "label": "Ver facturación", "description": "Consultar documentos y estado de preparación fiscal.", "group": "Facturación"},
     {"key": "facturacion.create", "label": "Preparar DTE", "description": "Crear borradores de facturas desde órdenes pagadas.", "group": "Facturación"},
     {"key": "facturacion.configure", "label": "Configurar emisor", "description": "Actualizar los datos fiscales del negocio.", "group": "Facturación"},
+    {"key": "facturacion.send_test", "label": "Transmitir DTE de prueba", "description": "Firmar, enviar y consultar documentos en el ambiente de pruebas de Hacienda.", "group": "Facturación"},
     {"key": "dashboard.view", "label": "Ver inicio", "description": "Ver el panel inicial adaptado al rol.", "group": "General"},
     {"key": "mesas.view", "label": "Ver mesas", "description": "Consultar mesas, zonas ocupadas y limpieza.", "group": "Mesas"},
     {"key": "mesas.create", "label": "Crear mesas", "description": "Registrar nuevas mesas.", "group": "Mesas"},

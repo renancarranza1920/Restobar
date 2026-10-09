@@ -1,83 +1,176 @@
 # Facturación electrónica de El Salvador
 
-Restobar prepara **borradores de Factura de consumidor final, tipo 01, versión 1 de referencia** a partir de órdenes completamente pagadas. Genera JSON, separa el IVA incluido en los precios, comprueba una referencia de esquema JSON y conserva un snapshot inmutable de la venta, el emisor, el receptor y los pagos.
+Restobar prepara **Factura electrónica, tipo 01 versión 2**, y **Comprobante de Crédito Fiscal, tipo 03 versión 4**, utilizando los esquemas aportados por el usuario desde factura.gob.sv. Incluye 33 catálogos con 1,681 registros del libro de Hacienda y un adaptador para firmar, enviar y consultar documentos en el **ambiente de pruebas `00`**.
 
-**Este módulo no emite un DTE con validez tributaria.** No firma, no autentica ante Hacienda, no transmite documentos y no genera ni inventa sellos de recepción. Todos los documentos usan ambiente `00` de pruebas, observaciones de borrador y un número de control **local provisional**. No existe una opción para activar producción simplemente cambiando una variable.
+**La transmisión está desactivada por defecto. Esta implementación no habilita emisión de producción ni sustituye la autorización de Hacienda.** Preparar un JSON, superar pruebas locales y recibir un sello del ambiente de pruebas son resultados distintos. El estado `ACEPTADO_PRUEBA` solo se registra al comprobar una respuesta real de pruebas con identidad, ambiente y sello concordantes; no acredita al contribuyente para emitir a sus clientes.
 
-## Instalar la referencia local
+## Referencias incluidas y procedencia
 
-Desde la raíz del repositorio y dentro del entorno virtual:
+Los esquemas se incluyen con sus **bytes originales** del ZIP compartido. Se comprueba su SHA-256 antes de usarlos; no se descargan de un espejo comunitario durante el arranque.
+
+| Documento | Archivo incluido | SHA-256 |
+| --- | --- | --- |
+| Factura 01 v2 | `app/schemas/official/fe-f-v2.json` | `2887ff3ccf5594eb1f49dcec1ce8bba134a86462f900069de1365d18ff997aff` |
+| CCF 03 v4 | `app/schemas/official/fe-ccf-v4.json` | `2c2db8b3f6144bdd0d128ec2babecd38f277f8493458a06cf1b2be7b816fba32` |
+| Invalidación v3 | `app/schemas/official/invalidacion-schema-v3.json` | `1ce117cb01b59da309dcbb237cc011e0c4539b3effe9cdd3c2b7794ea631693a` |
+| Contingencia v4 | `app/schemas/official/contingencia-schema-v4.json` | `03fc357397dc7aaa4a8b44f887497dd1ead3a04eb71ec043bb2c0cda485bb149` |
+
+La procedencia del ZIP, sus rutas originales y sus hashes están en [app/schemas/dte-reference.json](../app/schemas/dte-reference.json). El ZIP `svfe-json-schemas (1).zip` tiene SHA-256 `8587a7d679b22f875d1fb37be7a218c6b9ca499caa80a646e6894a4d6116ab64`.
+
+Los catálogos se extrajeron de **Catálogos - Facturación Electrónica.xlsx**, título V1.1, SHA-256 `e86d7edc503d876564cd2bf9b251fb100f838199330c0c513048f4075669b2c6`. El resultado, [mh-catalogs.json](../app/schemas/mh-catalogs.json), conserva códigos como texto, ceros iniciales, agrupaciones y filas de origen. [mh-catalogs-provenance.json](../app/schemas/mh-catalogs-provenance.json) fija el hash del resultado y los metadatos. La modificación del libro, 29 de junio de 2026, **es un metadato de archivo, no una fecha de vigencia normativa**.
+
+Los dos manuales compartidos declaran versión 2.0, actualización de mayo de 2026 en su historial. Las referencias de este documento corresponden a esos archivos; no se verificó de forma independiente que sean la publicación más reciente ni que Hacienda haya habilitado esas versiones para este contribuyente. Debe confirmarse antes de emisión real en el [portal oficial](https://factura.gob.sv/).
+
+## Instalación y actualización local
+
+Desde la raíz del repositorio, con el entorno virtual activo:
 
 ```bash
 python -m pip install -r requirements.txt
 python scripts/install_dte_reference.py
 ```
 
-El instalador descarga exclusivamente una referencia pública del esquema a `instance/dte-schemas/dte-fe-v1.json`, ruta ignorada por Git. Comprueba SHA-256 y mantiene la verificación TLS y la configuración de proxy existente. No transmite datos fiscales ni credenciales. No sobrescribe una referencia existente con un checksum distinto. La configuración opcional `DTE_SCHEMA_PATH` permite seleccionar otra ruta local, pero sus bytes deben seguir coincidiendo con la referencia fijada; no sirve para saltarse la verificación.
+El segundo comando verifica los cuatro esquemas incluidos sin red ni credenciales. `--destination /ruta/local` permite copiarlos, manteniendo sus bytes y sin reemplazar archivos distintos. `DTE_SCHEMA_PATH`, si ya estaba configurada, solo puede apuntar a los mismos bytes de **FE v2**: una antigua ruta FE v1 impedirá preparar documentos nuevos hasta corregirla o retirar esa configuración.
 
-El acceso de descarga requiere `raw.githubusercontent.com`. Para investigar la fuente y preparar una futura integración se necesita acceso a `factura.gob.sv` y a los dominios oficiales que Hacienda confirme; no debe reemplazarse una lista de red existente ni desactivarse TLS. En el entorno de trabajo se intentó consultar el sitio oficial y el proxy respondió `403`; los dominios oficiales siguen pendientes de acceso efectivo.
+Las tablas fiscales se crean de forma aditiva mediante la fábrica de la aplicación y `db.create_all()`. Los documentos guardan su JSON y snapshot originales; los envíos, el JWS y las respuestas se mantienen por separado en `FiscalEnvio`. No se borra el historial al instalar los esquemas. Antes de actualizar un servidor existente, respalda su base y verifica el arranque en una copia. Las pruebas automatizadas usan SQLite local; un servidor MySQL real requiere su propia validación.
 
-Los modelos `documentos_fiscales` y `secuencias_borrador_dte` son tablas nuevas y aditivas. La fábrica actual de la aplicación las crea mediante `db.create_all()`. No se borran tablas ni se cambia el historial existente. En MySQL, los snapshots utilizan `LONGTEXT` para admitir los tamaños permitidos por la referencia. Haz respaldo y valida este arranque en una copia del servidor antes del despliegue.
+### Direcciones: municipio y distrito son campos distintos
 
-## Usar el preparador
+CAT-012 contiene departamentos; CAT-013 contiene **44 municipios** y CAT-008 **262 distritos**, además de la entrada para extranjeros `00`. Los códigos territoriales deben validarse junto a su departamento porque se repiten entre departamentos.
 
-1. En **Facturación → Perfil fiscal**, ingresa la razón social, NIT, NRC, actividad económica, dirección, contacto y códigos del establecimiento y punto de venta. Obtén los códigos de tu inscripción y de los catálogos oficiales; el formato válido no garantiza que pertenezcan a tu registro. Los identificadores asignados por MH son opcionales en esta referencia y no se deducen de los códigos internos.
-2. Confirma que los precios registrados **ya incluyen IVA del 13 %**. El preparador extrae el IVA y conserva el importe cobrado; no aumenta el precio.
-3. Selecciona una orden pagada sin borrador. Ingresa el nombre del cliente y, cuando aplique, su identidad, contacto y dirección. La referencia v1 requiere tipo y número de documento al llegar a `montoTotalOperacion >= 200`; esta regla procede del esquema de referencia, no de una verificación independiente de la normativa vigente. DUI conserva el guion; NIT se ingresa sin guiones.
-4. Si hay pagos registrados como «tarjeta», confirma el subtipo de **cada pago**: `02` crédito o `03` débito, según el catálogo comunitario consultado. Verifica CAT-017 con Hacienda antes de implementar emisión. La aplicación conserva ese dato suplementario en el snapshot y no lo inventa a partir de «tarjeta».
-5. Confirma que todos los productos corresponden a IVA estándar, sin impuestos especiales, exenciones ni retenciones. La aplicación no conoce la clasificación fiscal de tus productos; esa revisión es necesaria.
-6. Guarda el borrador y descarga su JSON. La descarga conserva la estructura de la referencia e incluye la advertencia de borrador dentro de `extension.observaciones` y `apendice`; no incluye firmas ni un `selloRecibido` ficticio.
+El perfil fiscal y los formularios incluyen departamento, municipio, distrito y complemento. La aplicación filtra municipios y distritos por departamento y valida sus códigos completos. **El libro proporcionado no declara la relación entre cada municipio y sus distritos.** No se deduce esa relación por igualdad de códigos; el usuario debe comprobar que ambos corresponden a la dirección de su inscripción. Una selección que supera las validaciones locales no demuestra por sí sola esa pertenencia.
 
-Se admite una factura por orden completa. Si la cuenta se dividió, los pagos deben sumar exactamente el total de productos de la orden; todavía no se emite una factura independiente por división o comensal. Una petición repetida devuelve el mismo borrador y nunca reemplaza datos ya preparados. Los borradores no se pueden editar ni eliminar desde este módulo. Es una protección del historial, no un mecanismo de corrección fiscal: antes de emisión se debe implementar un flujo revisado para corregir preparaciones y gestionar documentos transmitidos conforme a MH.
+Los perfiles anteriores deben revisarse y completar el distrito. No conviertas automáticamente el antiguo código de municipio en un distrito ni copies una dirección de ejemplo como dato real.
 
-## Qué se valida y qué queda pendiente
+## Preparar una Factura o un CCF
 
-El preparador exige:
+1. En **Facturación → Perfil fiscal**, completa NIT, NRC, razón social, actividad económica, dirección, contacto y códigos de establecimiento y punto de venta según tu inscripción. Selecciona actividades y territorios de los catálogos incluidos. El formato válido no demuestra que los códigos estén asignados a tu negocio.
+2. Confirma que los precios de venta **incluyen IVA del 13 %**. El preparador extrae el impuesto y conserva el importe cobrado.
+3. Selecciona una orden completamente pagada y el tipo de documento. Restobar requiere nombre del cliente para todo borrador. En FE la identidad puede quedar vacía; si se ingresa, tipo y número deben completarse juntos. En CCF requiere NIT, NRC, actividad económica y dirección completa del receptor.
+4. Si existen pagos registrados como «tarjeta», identifica el subtipo de cada pago: CAT-017 `02`, débito; `03`, crédito. `01` corresponde a billetes y monedas. El dato suplementario se conserva en el snapshot; no se inventa a partir de «tarjeta».
+5. Confirma que toda la orden corresponde a IVA estándar, sin impuestos especiales, exenciones ni retenciones.
+6. Guarda el borrador y revisa sus datos y JSON antes de cualquier prueba de envío.
 
-- Autenticación y permisos `facturacion.view`, `facturacion.create` y `facturacion.configure`; los formularios fiscales tienen protección CSRF propia.
-- Orden pagada, importe positivo, productos activos cobrados, pagos coincidentes y ningún producto cancelado en el snapshot. El rango actual es $0.01 a $999,999.99.
-- Perfil completo, identidad del receptor compatible con la referencia y códigos de dirección con formato estricto en el servidor.
-- Matemática con `Decimal`: `ivaItem = ventaGravada × 0.13 / 1.13`, redondeado a centavos con `ROUND_HALF_UP`. `totalIva` suma los IVA de las líneas; por eso puede diferir en centavos de redondear el IVA de todo el total una sola vez. La base que muestra la pantalla es `total - totalIva`.
-- Esquema JSON Draft 7, incluidos sus campos requeridos, límites, patrones, condiciones y formatos. Los decimales se guardan como números JSON exactos.
-- Integridad SHA-256 del JSON al visualizar y descargar. Restricción única por orden, código de generación único y contador transaccional protegido ante peticiones simultáneas.
+Se prepara un documento por orden completa. Los pagos deben coincidir exactamente con los productos cobrados. No se prepara un documento distinto por comensal o división de cuenta. Repetir la preparación devuelve el mismo registro: no reemplaza un snapshot ya guardado. Las preparaciones y los documentos históricos no se editan ni eliminan desde este módulo.
 
-No se admiten propinas, CCF tipo 03, documentos relacionados, operaciones exentas/no sujetas, retenciones, impuestos especiales o ad valorem, descuentos fiscales, crédito, exportaciones, ventas de terceros, contingencias ni invalidaciones. Las órdenes con propina se bloquean hasta definir y desarrollar su tratamiento fiscal. Bebidas u otros productos con impuestos adicionales deben quedar fuera de este preparador aunque la orden esté pagada.
+La antigua afirmación de un umbral obligatorio de **$200** procedía del esquema FE v1 usado antes. Se retiró: los archivos proporcionados no permiten confirmar ese umbral como regla de la normativa V2. Que FE v2 admita campos nulos no elimina obligaciones legales de identificación. Los umbrales y condiciones deben verificarse en la **Normativa de Cumplimiento V2, anexo II**, antes de habilitar emisión a clientes. El nombre obligatorio y los campos adicionales requeridos en CCF son controles del preparador, no una declaración exhaustiva de esas obligaciones.
 
-El contador es propio de los borradores, separado por NIT, año, establecimiento y punto de venta. La numeración no constituye autorización, reserva ni correlativo de producción ante MH. El UUID es un identificador local de preparación. **Validar JSON no equivale a aceptar la operación tributaria**, identificar al contribuyente correctamente, verificar un catálogo actualizado o superar certificación.
+### Importes y numeración
 
-## Evidencia y procedencia
+Los cálculos usan `Decimal` y `ROUND_HALF_UP`, y los importes se serializan como números JSON exactos. En FE, la venta gravada incluye IVA y `ivaItem` extrae `ventaGravada × 0.13 / 1.13` con ocho decimales; `totalIva` se redondea después de sumar los impuestos de las líneas. CCF usa base y precio unitario sin IVA con hasta ocho decimales; calcula el tributo `20` desde las bases de las partidas antes de redondear el resumen a centavos. Ambos conservan el total pagado. Si cantidades o importes no permiten conciliar la aritmética dentro de la precisión admitida, se bloquea la preparación sin modificar el cobro.
 
-La fuente oficial que debe prevalecer es [Ministerio de Hacienda, portal de factura electrónica](https://factura.gob.sv/), apartado de información técnica y funcional y sus esquemas y catálogos. No se pudo verificar directamente su contenido durante esta implementación debido a la restricción de red del entorno.
+El Manual Funcional, páginas impresas 52–54 —PDF 55–57—, establece hasta ocho decimales en el cuerpo, dos en el resumen y redondeo hacia arriba cuando el primer decimal descartado es cinco o mayor. La holgura de un centavo no se utiliza para aumentar el importe del cliente.
 
-Para la comprobación estructural se consultó el [repositorio comunitario herson/dte-json-schemas](https://github.com/herson/dte-json-schemas), que declara publicar copias de los esquemas MH. Es independiente y no está afiliado a Hacienda. Se fijó:
+El número local sigue `DTE-{tipo}-{establecimiento}{puntoVenta}-{secuencia de 15 dígitos}`. El establecimiento usa `M/B/S/P` y tres números; el punto de venta, `P` y tres números, por ejemplo `M001/P001`. El contador se separa por NIT, ambiente, tipo, año de El Salvador, establecimiento y punto de venta, y se asigna transaccionalmente. El Manual Funcional, impresas 28–29 —PDF 31–32—, prohíbe repetir un número durante un año calendario. Este contador de preparación no reserva correlativos de producción ante MH.
 
-| Dato | Valor |
+### Operaciones que siguen fuera del preparador
+
+Se admiten órdenes de $0.01 a $999,999.99 con IVA estándar y pago inmediato mediante efectivo o tarjeta. Se bloquean propinas y operaciones que requieren tratamiento adicional. Siguen pendientes documentos relacionados, exenciones, ventas no sujetas, retenciones, impuestos especiales, descuentos fiscales, crédito, exportaciones y ventas por cuenta de terceros.
+
+El Manual Funcional explica cargos que no afectan la base imponible en impresas 29–30 —PDF 32–33—, pero no clasifica fiscalmente las propinas. Esa clasificación debe acordarse con el contador antes de incorporarlas. Los tributos informativos de alcohol, descritos en impresas 35–37 —PDF 38–40—, no deben sumarse automáticamente al total del restaurante; el propio manual indica que no afectan los valores del documento.
+
+## Firma y envío en pruebas
+
+El adaptador conecta el **firmador oficial instalado por separado** con la API de pruebas de Hacienda. El firmador, su distribución oficial, certificado y contraseña **no están incluidos ni se instalaron** con este cambio. El Manual Técnico, PDF 7–14 —impresas 4–11—, describe el servicio; Hacienda debe proporcionar o confirmar el paquete soportado y la habilitación del contribuyente.
+
+Configura los requisitos en el almacenamiento seguro del entorno o del servidor, fuera de Git. No pegues certificados, claves privadas, contraseñas ni tokens en chat, en el perfil fiscal o en capturas.
+
+| Variable | Uso |
 | --- | --- |
-| Commit de referencia | `01c62d14dc1126129e45ad282fca5ab18e8e7c6f` |
-| Archivo | `DTE-FE-v1.json` |
-| SHA-256 | `748673c0f2d45d84e6b13a21d2ba411eb731ce199eb946dc33ca9b995571f0c1` |
-| Versión y documento | `identificacion.version = 1`, `tipoDte = "01"` |
-| Procedencia registrada | [app/schemas/dte-reference.json](../app/schemas/dte-reference.json) |
+| `DTE_TRANSMISSION_ENABLED` | Habilitación explícita del transporte de pruebas; desactivado por defecto. |
+| `DTE_API_USER` | Usuario de aplicación del contribuyente para pruebas MH. |
+| `DTE_API_PASSWORD` | Contraseña de aplicación MH, almacenada como secreto. |
+| `DTE_SIGNER_URL` | Servicio de firma; por defecto `http://127.0.0.1:8113/firmardocumento/`. |
+| `DTE_SIGNER_PASSWORD` | Contraseña de la clave privada utilizada por el firmador, como secreto. |
 
-La descarga permanece local porque no se encontró una licencia de redistribución en ese espejo; sus bytes no se incluyen en Git. El checksum garantiza que se usa la referencia fijada, **no su autenticidad como publicación actual de MH**. Ese repositorio también incluye versiones FE v2 y CCF v4 y anuncia cambios de normativa. No se confirmó oficialmente su vigencia ni fechas de transición, por lo que no se implementaron ni se presentan fechas como hechos verificados. Antes de emisión debe obtenerse y compararse el paquete vigente de MH y actualizarse código, pruebas y referencia mediante un cambio revisado.
+El plazo de espera se fija en ocho segundos mediante `DTE_TIMEOUT_SECONDS`; no requiere otra variable de entorno. El servicio local HTTP debe permanecer en una red privada de confianza; una instalación remota debe usar transporte seguro. No desactives verificación TLS para autenticar o enviar a Hacienda. La API MH queda fijada a `https://apitest.dtes.mh.gob.sv`, ambiente `00`; no se habilita producción cambiando el perfil o los datos de un borrador.
 
-Los nombres de pago crédito/débito se contrastaron con [DIAL-Studio/odoo-l10n-el-salvador, CAT-017](https://github.com/DIAL-Studio/odoo-l10n-el-salvador/blob/7809f5d29b2f71ee4d09951e35afe21eb5304bbe/data/l10n_sv.forma_pago.csv), commit `7809f5d29b2f71ee4d09951e35afe21eb5304bbe`. Se utilizaron los códigos como datos de referencia, sin copiar código de esa implementación. Es otra fuente comunitaria y los catálogos oficiales siguen pendientes de comprobación. Por la misma razón, la pantalla de perfil pide elegir CAT-009 según la inscripción MH y no atribuye nombres a códigos no confirmados.
+El envío requiere el permiso administrativo `facturacion.send_test` y un formulario con protección CSRF. Habilitar variables no envía automáticamente las órdenes: el envío es una acción manual desde el detalle fiscal. Los permisos de consulta, preparación y perfil continúan separados en `facturacion.view`, `facturacion.create` y `facturacion.configure`.
 
-## Para implementar emisión real
+### Contratos del adaptador
 
-1. **Habilitación:** confirmar con MH tu inscripción, NIT/NRC, obligaciones, actividad, sucursales/puntos y autorización para usar el sistema de transmisión. Obtener documentación y catálogos vigentes y acordar con tu contador los impuestos que corresponden a cada producto, propinas y receptores.
-2. **Firma:** obtener certificados y acceso al firmador oficial o a un proveedor habilitado conforme a MH. Certificados, contraseñas y tokens se guardan fuera de Git y se inyectan de forma segura. No pegarlos en chat, en este perfil ni en archivos rastreados.
-3. **Pruebas y certificación:** implementar el protocolo oficial de autenticación y recepción en pruebas, validación actual, firma, estados, respuestas reales, reintentos idempotentes, trazabilidad y conservación de documentos. Usar las URL y contratos que MH confirme; esta implementación no inventa endpoints de API.
-4. **Ciclo fiscal completo:** cubrir contingencias, invalidaciones y correcciones autorizadas, documentos adicionales necesarios, representación gráfica y consulta/QR conforme a la normativa, entrega al cliente y conservación legal. No fabricar respuestas cuando Hacienda rechace o no esté disponible.
-5. **Producción:** completar certificación y habilitación, verificar backup, permisos y secretos; después conectar producción mediante un cambio de código y configuración revisado. El envío debe registrar el sello y estado reales y no convertir automáticamente un borrador en «aceptado».
+Las siguientes rutas proceden del Manual Técnico suministrado. Las páginas indicadas son **páginas físicas del PDF**; en el cuerpo, la impresa equivale a PDF menos tres.
 
-No se solicitaron certificados ni credenciales para generar los borradores. Cuando se implemente el transporte, comprueba primero las vinculaciones ya disponibles y solicita únicamente lo que aún falte en la configuración segura del servidor.
+| Acción | Método y ruta | Referencia |
+| --- | --- | --- |
+| Autenticación MH | `POST /seguridad/auth` | PDF 19–21 |
+| Recepción individual | `POST /fesv/recepciondte` | PDF 21–23 |
+| Consulta de un DTE | `POST /fesv/recepcion/consultadte` | PDF 26–27 |
+| Firma local | `POST /firmardocumento/` | PDF 14 |
+
+La autenticación usa formulario `user`/`pwd`; el token devuelto puede incluir ya el prefijo `Bearer`, que se normaliza una sola vez. El firmador recibe el objeto DTE en `dteJson`, NIT, `activo` y `passwordPri`, y devuelve un JWS. La recepción MH utiliza ambiente, `idEnvio`, versión y tipo del documento, ese JWS y su código de generación. La consulta utiliza `nitEmisor`, **`tdte`** y el mismo código de generación. No se incluyen secretos en el JSON de la venta.
+
+El snapshot sin firma permanece inmutable. El JWS y las respuestas pertenecen al registro de envío. Antes de registrar aceptación se exige una respuesta `PROCESADO`, sello no vacío y concordancia de ambiente y código de generación. Un HTTP 200 sin esos datos, una respuesta malformada o una llamada que vence no demuestran aceptación. Los rechazos y las observaciones reales deben conservarse para revisión.
+
+| Estado del envío | Significado |
+| --- | --- |
+| `NUEVO` | Todavía no se ha iniciado el envío. |
+| `EN_PROCESO` | Una operación adquirió el registro para evitar acciones simultáneas. |
+| `ENVIANDO` | El intento se registró antes de llamar al servicio de recepción. |
+| `ERROR_LOCAL` | Fallo previo al envío; puede corregirse y reintentarse manualmente. |
+| `ENVIO_INCIERTO` | Se desconoce el resultado; la siguiente acción solo consulta. |
+| `RECHAZADO` | Rechazo registrado; puede consultarse, pero no reenviarse el mismo snapshot inmutable. |
+| `ACEPTADO_PRUEBA` | Identidad y sello de pruebas comprobados. |
+
+Si vence el envío o no puede procesarse su respuesta, primero se consulta su estado con la misma identidad, como exige la política del Manual Técnico, PDF 17–18. Si la consulta falla o su resultado es incierto, **no se reenvía automáticamente**. No se sustituye el documento por un UUID nuevo ni se interpreta cualquier error de consulta como «no recibido». Este adaptador no efectúa reenvíos automáticos, no implementa toda la política de reintentos ni convierte una interrupción en un evento de contingencia.
+
+### JSON de entrega y consulta pública
+
+Después de una aceptación de pruebas comprobada, el JSON de entrega agrega `firmaElectronica` —el JWS— y `selloRecibido` —la respuesta de MH— al objeto original, conforme al Manual Técnico, PDF 34–35. El objeto enriquecido es una descarga separada; no reemplaza el snapshot ni se vuelve a enviar como objeto a firmar. **Conserva también las advertencias de borrador del objeto original firmado**: no se borran ni se reescriben tras recibir un sello de pruebas.
+
+El enlace de consulta utiliza la URL indicada para el QR en PDF 33:
+
+```text
+https://admin.factura.gob.sv/consultaPublica?ambiente=00&codGen={codigoGeneracion}&fechaEmi={YYYY-MM-DD}
+```
+
+Los valores proceden del documento aceptado. Se conservan las mayúsculas de `consultaPublica`, `codGen` y `fechaEmi`; no se inventa un sello de producción. Esta versión muestra el enlace; la imagen QR y la representación gráfica completa quedan pendientes. La interfaz y las descargas siguen indicando el ambiente de pruebas. El preview de Restobar **no constituye una representación gráfica legal completa**: sus requisitos de campos dependen de la Normativa, anexos II/IV. Tampoco se entrega una factura legal de cliente a partir de un borrador sin firma y sello.
+
+## Documentos anteriores y conservación
+
+Los snapshots FE v1 existentes siguen disponibles para lectura y descarga con sus bytes y checksum originales. **No se reescriben como FE v2, no se firman ni se transmiten mediante el adaptador actual.** El detalle identifica su versión para evitar confundir el historial con una preparación nueva.
+
+La actualización tampoco corrige datos de un documento ya aceptado mediante edición local. Es necesario un flujo fiscal explícito de reemplazo, invalidación y conservación; borrar la venta o cambiar un estado local no invalida un documento ante Hacienda.
+
+## Pendientes para emisión real
+
+1. **Normativa y registro.** Obtener la Normativa de Cumplimiento V2 y anexos II/IV; confirmar con Hacienda vigencia, versiones autorizadas, inscripción, obligaciones y códigos reales del emisor. Revisar con el contador identificación de receptores, clasificación de productos, propinas, impuestos y retenciones.
+2. **Firmador y secretos.** Obtener el paquete oficial soportado, certificado y habilitación para pruebas. Instalar y comprobar el firmador de forma segura; verificar las vinculaciones ya disponibles antes de añadir requisitos que falten. Los valores se proporcionan mediante configuración segura, nunca en chat o Git.
+3. **Pruebas con Hacienda.** Ejecutar transmisiones reales de pruebas y el procedimiento de acreditación. Las pruebas locales y las respuestas simuladas no satisfacen esos requisitos.
+4. **Ciclo fiscal.** Implementar y validar contingencia, lotes, invalidaciones, correcciones, documentos adicionales, representación gráfica, entrega y conservación legal, con auditoría y recuperación de fallos.
+5. **Producción.** Completar autorización y validación del despliegue, respaldos, permisos y secretos. La API de producción requiere un cambio revisado y separado; este código solo permite pruebas.
+
+Los esquemas de eventos incluidos permiten preparar ese trabajo futuro, pero **los flujos de contingencia e invalidación todavía no están implementados**. El Manual Funcional, impresas 18–20 —PDF 21–23—, exige transmitir el evento de contingencia dentro de 24 horas del cese de la causa y los documentos informados dentro de 72 horas del sello del evento. La emisión en contingencia sigue requiriendo firma.
+
+Para invalidación, el mismo manual, impresas 11–13 —PDF 14–16—, diferencia plazos de FE y CCF y exige, salvo excepciones, recibir primero el documento de reemplazo cuando hay corrección. La tabla fija para CCF el décimo día hábil del mes siguiente, pero un párrafo de la página impresa 12 describe un plazo distinto. Esta inconsistencia debe resolverse con la normativa antes de automatizar un calendario; no se presenta el flujo como terminado.
+
+### Acreditación: transmisiones mínimas
+
+El Manual Funcional, impresa 76 —PDF 79—, enumera estas **transmisiones satisfactorias en el sistema de Hacienda**:
+
+| Documento o evento | Cantidad |
+| --- | ---: |
+| Factura | 90 |
+| Comprobante de Crédito Fiscal | 75 |
+| Nota de Remisión / Nota de Crédito | 50 por tipo |
+| Nota de Débito | 25 |
+| Comprobante de Retención | 50 |
+| Comprobante de Liquidación | 75 |
+| Documento Contable de Liquidación | 50 |
+| Factura de Exportación | 90 |
+| Factura de Sujeto Excluido / Comprobante de Donación | 25 por tipo |
+| Invalidación / Contingencia / Retorno / Operaciones Especiales | 5 por evento |
+
+La autorización y los tipos aplicables al contribuyente se tramitan con Hacienda. Esta tabla no significa que Restobar soporte ya todos esos documentos o eventos.
 
 ## Validación reproducible
 
 ```bash
 python scripts/install_dte_reference.py
 python -m unittest discover -s tests -p 'test_billing*.py' -v
+python -m unittest discover -s tests -p 'test_fiscal_catalogs.py' -v
+python -m unittest discover -s tests -p 'test_dte_transport.py' -v
+python -m unittest discover -s tests -p 'test_fiscal_submission.py' -v
 ```
 
-Las pruebas usan datos sintéticos y bases SQLite desechables, sin conexión a Hacienda ni a la base configurada de producción. Verifican esquema y decimales, snapshots, protección CSRF y permisos, idempotencia, controles fiscales, tarjetas, integridad y concurrencia. La compatibilidad DDL de `LONGTEXT` se prepara para MySQL, pero una base MySQL real y la recepción de MH requieren validación independiente.
+Las pruebas utilizan datos sintéticos y bases locales desechables. Verifican esquemas, precisión decimal, catálogos, snapshots, protección CSRF, permisos, tarjetas, integridad y concurrencia. Las pruebas del transporte usan servicios simulados para firma, autenticación, aceptación, rechazo y resultados inciertos; **no se contactó a Hacienda ni se ejecutó acreditación con esas pruebas**. Un resultado satisfactorio local no verifica credenciales, certificado, disponibilidad del firmador, registro fiscal ni producción.

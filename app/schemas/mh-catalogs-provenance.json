@@ -1,0 +1,15 @@
+{
+  "dataset_filename": "mh-catalogs.json",
+  "dataset_sha256": "0e015d0f4f13ef01dff36f18563e9d5e245c857c58fccc9cf0d21684d0783891",
+  "publisher": "Ministerio de Hacienda de El Salvador",
+  "source_origin": "Documento compartido por el usuario desde factura.gob.sv",
+  "source_filename": "Catálogos - Facturación Electrónica.xlsx",
+  "source_sha256": "e86d7edc503d876564cd2bf9b251fb100f838199330c0c513048f4075669b2c6",
+  "source_title": "CATÁLOGOS - FACTURACIÓN ELECTRÓNICA - V 1.1",
+  "version": "1.1",
+  "workbook_created_at": "2025-10-08T19:44:25",
+  "workbook_modified_at": "2026-06-29T20:30:20",
+  "effective_date": null,
+  "date_note": "Las fechas del libro son metadatos del archivo, no fechas de vigencia normativa.",
+  "territorial_note": "CAT-013 contiene 44 municipios; CAT-008 contiene 262 distritos. Ambos incluyen 00 para extranjeros. El libro no declara la relación municipio-distrito."
+}

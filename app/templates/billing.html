@@ -9,19 +9,19 @@
     </header>
     <section class="billing-hero" aria-label="Estado de implementación">
         <div class="billing-hero-icon"><i class="fa-solid fa-file-invoice" aria-hidden="true"></i></div>
-        <div><span class="billing-badge">Preparación · ambiente de pruebas</span><h2>Tu siguiente paso hacia el DTE</h2><p>Prepara Facturas tipo 01, conserva el detalle de la venta y descarga el JSON. Cada documento permanece como <strong>BORRADOR SIN VALIDEZ TRIBUTARIA</strong> hasta integrar firma, certificación y recepción de Hacienda.</p></div>
+        <div><span class="billing-badge">Preparación · ambiente de pruebas</span><h2>Tu siguiente paso hacia el DTE</h2><p>Prepara Facturas 01 v2 y Comprobantes de Crédito Fiscal 03 v4, conserva el detalle de la venta y descarga el JSON. La firma y recepción de pruebas se consultan en cada documento. Los documentos de este ambiente no tienen validez tributaria.</p></div>
     </section>
     <div class="billing-roadmap" aria-label="Pasos de implementación">
         <article class="billing-step {{ 'is-ready' if not issues else '' }}"><span>01</span><div><strong>Perfil y referencia</strong><small>{{ 'Datos completos · referencia local verificada' if not issues else 'Completa el perfil fiscal y la referencia local' }}</small></div></article>
         <article class="billing-step is-ready"><span>02</span><div><strong>Preparar la venta</strong><small>Orden pagada, cliente y revisión de IVA</small></div></article>
-        <article class="billing-step"><span>03</span><div><strong>Firma y certificación</strong><small>Pendiente de habilitación con Hacienda</small></div></article>
-        <article class="billing-step"><span>04</span><div><strong>Recepción y entrega</strong><small>Pendiente de integración y sello oficial</small></div></article>
+        <article class="billing-step"><span>03</span><div><strong>Conectar el firmador</strong><small>Requiere certificado y credenciales de pruebas</small></div></article>
+        <article class="billing-step"><span>04</span><div><strong>Pruebas y habilitación</strong><small>Recepción de pruebas · producción pendiente</small></div></article>
     </div>
     {% if issues %}<aside class="billing-notice" role="status"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><div><strong>Antes de preparar tu primer borrador</strong>{% for issue in issues %}<p>{{ issue }}</p>{% endfor %}</div></aside>{% endif %}
     <section class="panel">
         <div class="panel-header"><div><h2 class="panel-title">Documentos preparados</h2><p class="text-muted">Snapshots inmutables de las últimas 100 órdenes documentadas.</p></div><span class="billing-badge">{{ documents|length }} borradores</span></div>
         <div class="billing-table-wrap"><table class="billing-table"><thead><tr><th>Documento</th><th>Cliente</th><th>Total</th><th>Estado</th><th><span class="sr-only">Acciones</span></th></tr></thead><tbody>
-        {% for document in documents %}<tr><td><strong>Factura · orden #{{ document.orden_id }}</strong><small>{{ document.created_at|datetime_short }}</small></td><td>{{ document.nombre_receptor }}</td><td>{{ document.total|money }}</td><td><span class="billing-badge">BORRADOR</span></td><td><a class="button button-ghost button-sm" href="{{ url_for('billing.detail', document_id=document.id) }}">Ver documento <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td></tr>
+        {% for document in documents %}<tr><td><strong>{{ 'CCF' if document.tipo_dte == '03' else 'Factura' }} · orden #{{ document.orden_id }}</strong><small>{{ document.created_at|datetime_short }}</small></td><td>{{ document.nombre_receptor }}</td><td>{{ document.total|money }}</td><td><span class="billing-badge">BORRADOR</span></td><td><a class="button button-ghost button-sm" href="{{ url_for('billing.detail', document_id=document.id) }}">Ver documento <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></td></tr>
         {% else %}<tr><td colspan="5"><div class="billing-empty"><i class="fa-solid fa-receipt" aria-hidden="true"></i><strong>Tu primer documento empieza con una venta</strong><p>Cuando una orden esté pagada, podrás preparar su borrador aquí.</p></div></td></tr>{% endfor %}
         </tbody></table></div>
     </section>
@@ -29,6 +29,6 @@
         <div class="panel-header"><div><h2 class="panel-title">Ventas listas para revisar</h2><p class="text-muted">Últimas 50 órdenes pagadas sin borrador. La revisión confirma su compatibilidad fiscal.</p></div></div>
         <div class="billing-order-grid">{% for order in paid_orders %}<article class="billing-order-card"><span class="billing-eyebrow">Orden #{{ order.id }}</span><strong>{{ order.nombre_cliente or order.mesa_etiqueta }}</strong><span class="billing-order-total">{{ order.total|money }}</span><a class="button button-ghost" href="{{ url_for('billing.new', order_id=order.id) }}">Preparar borrador <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></article>{% else %}<p class="billing-empty">No hay órdenes pagadas pendientes de documentar.</p>{% endfor %}</div>
     </section>{% endif %}
-    <aside class="billing-footnote"><strong>Alcance actual:</strong> Factura 01 v1 de referencia, IVA estándar del 13 % incluido en precios, pago al contado. No admite CCF, propinas, impuestos especiales, exenciones, retenciones ni contingencias. La vigencia del esquema y los catálogos deben verificarse con Hacienda antes de implementar producción. <a href="{{ reference.official_information_page }}" target="_blank" rel="noopener noreferrer">Información oficial de MH <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a></aside>
+    <aside class="billing-footnote"><strong>Alcance actual:</strong> Factura 01 v2 y CCF 03 v4 con los esquemas oficiales aportados, IVA estándar del 13 % incluido en precios y pago al contado. No admite propinas, impuestos especiales, exenciones, retenciones ni contingencias. Confirma la habilitación y la vigencia aplicable con Hacienda antes de producción. Los snapshots anteriores se conservan para consulta. <a href="{{ reference.official_information_page }}" target="_blank" rel="noopener noreferrer">Información oficial de MH <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a></aside>
 </div>
 {% endblock %}
