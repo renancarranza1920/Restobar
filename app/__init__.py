@@ -41,9 +41,11 @@ def create_app():
 
     from . import models
     from .routes import api_bp, web_bp
+    from .billing import billing_bp
 
     app.register_blueprint(web_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(billing_bp)
 
     with app.app_context():
         db.create_all()

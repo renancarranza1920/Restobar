@@ -39,6 +39,7 @@ from .extensions import db
 from .models import (
     AuditLog,
     Categoria,
+    DocumentoFiscal,
     ListaEspera,
     Mesa,
     MovimientoCaja,
@@ -1107,6 +1108,8 @@ def actualizar_preferencias():
         "sidebar_clock": (request.form.get("sidebar_clock") or "").strip(),
         "default_theme": (request.form.get("default_theme") or "").strip(),
         "ticket_footer": (request.form.get("ticket_footer") or "").strip(),
+        "brand_accent": request.form.get("brand_accent", current_preferences["brand_accent"]),
+        "motion_enabled": "1" if bool_from_form(request.form.get("motion_enabled")) else "0",
     }
 
     if logo_url:
@@ -1139,6 +1142,8 @@ def actualizar_preferencias():
         errors.append("Selecciona que debe mostrar el reloj del menu.")
     if payload["default_theme"] not in valid_themes:
         errors.append("Selecciona un tema inicial valido.")
+    if payload["brand_accent"] not in {choice["value"] for choice in choices["brand_accents"]}:
+        errors.append("Selecciona una paleta de color válida.")
 
     if errors:
         if uploaded_logo:
@@ -1731,7 +1736,7 @@ def eliminar_usuario(user_id):
     if user.nickname == current_app.config["DEFAULT_ADMIN_NICKNAME"]:
         flash("No puedes borrar la cuenta base del administrador.", "warning")
         return redirect(url_for("web.usuarios"))
-    if user.sesiones_caja or user.ordenes or user.movimientos_inventario:
+    if user.sesiones_caja or user.ordenes or user.movimientos_inventario or DocumentoFiscal.query.filter_by(usuario_id=user.id).first():
         flash("No se puede borrar este usuario porque ya tiene movimientos registrados.", "warning")
         return redirect(url_for("web.usuarios"))
 
@@ -3272,7 +3277,7 @@ def productos():
     low_stock = get_low_stock_products(limit=6)
     return render_template(
         "products.html",
-        page_title="Productos",
+        page_title="Nuestra carta",
         products=products,
         low_stock_products=low_stock,
         search=search,
@@ -3968,6 +3973,24 @@ def api_health():
 @login_required
 def api_me():
     return jsonify(current_user.to_dict())
+
+
+@api_bp.get("/service-alerts")
+@login_required
+def api_service_alerts():
+    """Expose only the actionable alerts permitted for the current staff role."""
+    alerts = []
+    if user_can(current_user, "cocina.view"):
+        pending_count = len(get_pending_kitchen_items())
+        if pending_count:
+            alerts.append({"kind": "kitchen", "title": "Comandas en cocina", "message": f"{pending_count} productos pendientes de preparar.", "url": url_for("web.cocina"), "count": pending_count})
+    if user_can(current_user, "inventario.view"):
+        low_stock = get_low_stock_products(limit=None)
+        if low_stock:
+            alerts.append({"kind": "stock", "title": "Revisa el inventario", "message": f"{len(low_stock)} productos con stock bajo.", "url": url_for("web.inventario"), "count": len(low_stock)})
+    if user_can(current_user, "caja.open") and not get_active_cash_session():
+        alerts.append({"kind": "cash", "title": "Caja pendiente de apertura", "message": "Abre el turno antes de registrar nuevas órdenes.", "url": url_for("web.caja"), "count": 1})
+    return jsonify({"alerts": alerts})
 
 
 @api_bp.get("/dashboard")

@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
+from sqlalchemy.dialects.mysql import LONGTEXT
 
 from .extensions import db
 
@@ -127,6 +128,40 @@ class PreferenciaSistema(db.Model):
 
     def to_dict(self):
         return {"clave": self.clave, "valor": self.valor}
+
+
+class SecuenciaBorradorDTE(db.Model):
+    """Local draft numbering only; this is not an MH authorization."""
+
+    __tablename__ = "secuencias_borrador_dte"
+
+    alcance = db.Column(db.String(100), primary_key=True)
+    siguiente = db.Column(db.BigInteger, default=0, nullable=False)
+
+
+class DocumentoFiscal(db.Model):
+    """Immutable, unsigned preparation snapshot of one fully paid order."""
+
+    __tablename__ = "documentos_fiscales"
+
+    id = db.Column(db.Integer, primary_key=True)
+    orden_id = db.Column(db.Integer, db.ForeignKey("ordenes.id"), unique=True, nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=False)
+    codigo_generacion = db.Column(db.String(36), unique=True, nullable=False)
+    numero_control = db.Column(db.String(31), nullable=False)
+    tipo_dte = db.Column(db.String(2), default="01", nullable=False)
+    ambiente = db.Column(db.String(2), default="00", nullable=False)
+    estado = db.Column(db.String(20), default="BORRADOR", nullable=False)
+    nombre_receptor = db.Column(db.String(250), nullable=False)
+    total = db.Column(db.Numeric(14, 2), nullable=False)
+    iva = db.Column(db.Numeric(14, 2), nullable=False)
+    documento_json = db.Column(db.Text().with_variant(LONGTEXT(), "mysql"), nullable=False)
+    documento_sha256 = db.Column(db.String(64), nullable=False)
+    snapshot_json = db.Column(db.Text().with_variant(LONGTEXT(), "mysql"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    orden = db.relationship("Orden", lazy=True)
+    usuario = db.relationship("Usuario", lazy=True)
 
 
 class AuditLog(db.Model):

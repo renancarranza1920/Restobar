@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% set page_title = 'Preparar factura' %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='billing.css') }}">{% endblock %}
+{% block content %}
+<div class="filament-dashboard p-4 md:p-6 billing-page">
+    <header class="page-header"><div><p class="billing-eyebrow">Factura 01 · orden #{{ order.id }}</p><h1>Un cliente, una venta, un documento</h1><p class="text-muted">Revisa la identidad del cliente antes de guardar el snapshot fiscal.</p></div><a class="button button-ghost" href="{{ url_for('billing.index') }}">Volver a facturación</a></header>
+    {% if issue %}<aside class="billing-notice" role="alert"><i class="fa-solid fa-circle-info" aria-hidden="true"></i><p>{{ issue }}</p></aside>{% endif %}
+    <div class="billing-editor-layout">
+        <form method="post" class="panel">
+            <input type="hidden" name="billing_csrf" value="{{ billing_csrf_token() }}">
+            <div class="panel-header"><div><h2 class="panel-title">Datos del cliente</h2><p class="text-muted">Desde $200.00, la referencia v1 exige un documento de identidad.</p></div></div>
+            <div class="panel-body billing-form-grid">
+                <div class="billing-field billing-field-wide"><label for="buyer-name">Nombre del cliente</label><input id="buyer-name" name="nombre" value="{{ form.get('nombre', '') }}" maxlength="250" autocomplete="name" required></div>
+                <div class="billing-field"><label for="buyer-type">Tipo de documento</label><select id="buyer-type" name="tipoDocumento" {% if order.total >= 200 %}required{% endif %}><option value="">Sin documento (si aplica)</option>{% for code,label in [('13','DUI'),('36','NIT'),('02','Carnet de residente'),('03','Pasaporte'),('37','Otro')] %}<option value="{{ code }}" {% if form.get('tipoDocumento') == code %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+                <div class="billing-field"><label for="buyer-id">Número de documento</label><input id="buyer-id" name="numDocumento" value="{{ form.get('numDocumento','') }}" maxlength="20" {% if order.total >= 200 %}required{% endif %}><small>DUI con guion; NIT sin guiones.</small></div>
+                <div class="billing-field"><label for="buyer-email">Correo (opcional)</label><input id="buyer-email" name="correo" type="email" value="{{ form.get('correo','') }}" maxlength="100" autocomplete="email"></div>
+                <div class="billing-field"><label for="buyer-phone">Teléfono (opcional)</label><input id="buyer-phone" name="telefono" type="tel" value="{{ form.get('telefono','') }}" maxlength="30" autocomplete="tel"></div>
+                <details class="billing-field-wide billing-address"><summary>Agregar dirección del cliente (opcional)</summary><div class="billing-form-grid">{% for key,label,maxlength in [('departamento','Código departamento',2),('municipio','Código municipio v1',2),('complemento','Dirección',200)] %}<div class="billing-field"><label for="buyer-{{ key }}">{{ label }}</label><input id="buyer-{{ key }}" name="{{ key }}" maxlength="{{ maxlength }}" value="{{ form.get(key, '') }}"></div>{% endfor %}</div></details>
+                {% for payment in order.pagos if payment.metodo == 'tarjeta' %}<div class="billing-field billing-field-wide"><label for="card-{{ payment.id }}">Pago con tarjeta #{{ payment.id }} · {{ payment.monto|money }}</label><select name="tarjeta_codigo_{{ payment.id }}" id="card-{{ payment.id }}" required><option value="">Identifica el tipo de tarjeta usado</option><option value="02" {% if form.get('tarjeta_codigo_' ~ payment.id) == '02' %}selected{% endif %}>02 · Tarjeta de crédito</option><option value="03" {% if form.get('tarjeta_codigo_' ~ payment.id) == '03' %}selected{% endif %}>03 · Tarjeta de débito</option></select><small>La orden solo registró «tarjeta»; confirma el subtipo para el borrador.</small></div>{% endfor %}
+                <label class="billing-check billing-field-wide"><input type="checkbox" name="operacion_estandar" value="1" required {% if form.get('operacion_estandar') == '1' %}checked{% endif %}><span>Confirmo que todos los productos de esta orden están sujetos al IVA estándar del 13 %, sin impuestos especiales, exenciones ni retenciones.</span></label>
+                <p class="billing-field-wide text-muted">Este documento es una Factura de consumidor final. El Comprobante de Crédito Fiscal (CCF) requiere otra integración y aún no se genera aquí.</p>
+            </div>
+            <div class="billing-form-actions"><a class="button button-ghost" href="{{ url_for('billing.index') }}">Cancelar</a><button class="button button-primary" type="submit" {% if issue %}disabled{% endif %}><i class="fa-solid fa-file-invoice" aria-hidden="true"></i> Preparar borrador</button></div>
+        </form>
+        <aside class="panel billing-order-summary"><div class="panel-header"><h2 class="panel-title">Tu venta, en detalle</h2></div><div class="panel-body"><span class="billing-badge">{{ order.estado|capitalize }}</span><p class="text-muted">{{ order.mesa_etiqueta }}</p><ul class="billing-lines">{% for item in order.items_activos %}<li><span>{{ item.cantidad }} × {{ item.producto.nombre }}</span><strong>{{ item.subtotal|money }}</strong></li>{% endfor %}</ul><div class="billing-total"><span>Total pagado de productos</span><strong>{{ order.total|money }}</strong></div><p class="billing-footnote">El total se conserva tal como fue cobrado. El IVA se extrae de cada línea y se redondea a centavos.</p><p class="billing-footnote">El borrador queda inmutable. No se firma, no se transmite y su numeración es local provisional.</p></div></aside>
+    </div>
+</div>
+{% endblock %}

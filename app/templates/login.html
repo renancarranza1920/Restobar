@@ -9,7 +9,7 @@
                     {% if business_logo_url %}
                         <img src="{{ business_logo_url }}" alt="{{ app_name }} logo">
                     {% else %}
-                        {{ business_initial | default('R') }}
+                        <img src="{{ url_for('static', filename='brand/restobar-mark.svg') }}" alt="">
                     {% endif %}
                 </div>
                 <div class="brand-details">
@@ -19,24 +19,26 @@
             </div>
 
             <div class="login-copy">
-                <span class="login-kicker">{{ 'Sesión protegida' if reauth else 'Acceso del equipo' }}</span>
-                <h1>{{ 'Confirma tu sesión' if reauth else 'Bienvenido de vuelta' }}</h1>
+                <span class="login-kicker"><span class="status-dot" aria-hidden="true"></span>{{ 'Sesión protegida' if reauth else 'Hecho para tu restaurante' }}</span>
+                <h1>{{ 'Un momento. Confirma tu acceso.' if reauth else 'Buen servicio. Desde el primer pedido.' }}</h1>
+                <p>Tu sala, tu cocina y tus cuentas, trabajando al mismo ritmo.</p>
             </div>
 
-            <div class="login-signal" aria-hidden="true">
-                <div class="login-signal-line is-active"></div>
-                <div class="login-signal-line"></div>
-                <div class="login-signal-line is-short"></div>
+            <div class="restaurant-login-illustration">
+                <img src="{{ url_for('static', filename='brand/restaurant-table.svg') }}" alt="Ilustración de una mesa de restaurante con pizza, bebida y ensalada">
+                <div class="restaurant-login-sticker"><i class="fa-solid fa-utensils" aria-hidden="true"></i><span>Más sabor.<br><strong>Más orden.</strong></span></div>
             </div>
+            <div class="restaurant-login-features"><span><i class="fa-solid fa-chair" aria-hidden="true"></i> Sala conectada</span><span><i class="fa-solid fa-fire-burner" aria-hidden="true"></i> Cocina al día</span><span><i class="fa-solid fa-receipt" aria-hidden="true"></i> Cuentas claras</span></div>
         </div>
 
         <div class="login-panel">
             <div class="login-panel-head">
                 <span class="login-access-badge">
                     <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
-                    Usuario
+                    {{ 'Verificación del equipo' if reauth else 'Acceso del equipo' }}
                 </span>
-                <h2>{{ 'Confirmar acceso' if reauth else 'Entrar a Restobar' }}</h2>
+                <h2>{{ 'Confirmar acceso' if reauth else '¡Qué bueno verte!' }}</h2>
+                <p>{{ 'Ingresa tu contraseña para continuar con seguridad.' if reauth else 'Ingresa a tu espacio de trabajo. Hoy hay mucho por servir.' }}</p>
             </div>
 
             <form class="form-stack login-form login-form-modern" method="post" action="{{ url_for('web.login_submit') }}">
@@ -55,7 +57,7 @@
                             value="{{ current_user.nickname if reauth else (nickname_value | default('', true)) }}"
                             {% if reauth %}readonly{% endif %}
                             required
-                            placeholder="admin"
+                            placeholder="Tu nombre de usuario"
                         >
                     </div>
                 </div>
@@ -66,7 +68,7 @@
                     </label>
                     <div class="input-with-icon login-field-shell">
                         <i class="fa-solid fa-lock login-field-icon" aria-hidden="true"></i>
-                        <input id="password" type="password" name="password" autocomplete="current-password" required placeholder="************">
+                        <input id="password" type="password" name="password" autocomplete="current-password" required placeholder="Tu contraseña">
                         <button type="button" class="btn-icon toggle-password" aria-label="Mostrar contraseña">
                             <i class="fa-regular fa-eye"></i>
                         </button>
@@ -84,11 +86,13 @@
                 </div>
 
                 <button class="button button-primary button-full login-submit" type="submit">
-                    <span>{{ 'Confirmar' if reauth else 'Entrar' }}</span>
+                    <span>{{ 'Confirmar mi acceso' if reauth else 'Entrar al restaurante' }}</span>
                     <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
                 </button>
             </form>
+            <p class="restaurant-login-security"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Un espacio seguro para tu equipo y tu negocio.</p>
         </div>
     </article>
+    <p class="restaurant-login-footer">{{ app_name | default('Restobar') }} <span aria-hidden="true">·</span> Cada detalle cuenta.</p>
 </section>
 {% endblock %}

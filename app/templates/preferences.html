@@ -187,11 +187,23 @@
                             <h2 class="panel-title font-bold">
                                 <i class="fa-solid fa-palette mr-2 text-muted"></i> Apariencia
                             </h2>
-                            <p class="text-sm text-muted mt-1">Define el tema inicial para nuevas sesiones.</p>
+                            <p class="text-sm text-muted mt-1">Haz que cada pantalla se sienta como tu restaurante.</p>
                         </div>
                     </div>
 
                     <div class="panel-body form-stack">
+                        <div>
+                            <label for="brand_accent" class="block text-sm font-bold text-gray-800 mb-2">Paleta del restaurante</label>
+                            <select id="brand_accent" name="brand_accent" {% if not can_edit_preferences %}disabled{% endif %}>
+                                {% for accent in choices.brand_accents %}
+                                    <option value="{{ accent.value }}" {% if accent.value == preferences.brand_accent %}selected{% endif %}>{{ accent.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <label class="checkbox-row">
+                            <input type="checkbox" name="motion_enabled" value="1" {% if preferences.motion_enabled == '1' %}checked{% endif %} {% if not can_edit_preferences %}disabled{% endif %}>
+                            <span><strong>Animaciones suaves</strong><br><small>Entradas y transiciones. Respetamos también la preferencia de movimiento reducido del dispositivo.</small></span>
+                        </label>
                         <div>
                             <label for="default_theme" class="block text-sm font-bold text-gray-800 mb-2">Tema inicial</label>
                             <select id="default_theme" name="default_theme" {% if not can_edit_preferences %}disabled{% endif %}>

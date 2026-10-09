@@ -36,6 +36,8 @@ class Config:
     TAKEOUT_TABLE_NUMBER = int(getenv("TAKEOUT_TABLE_NUMBER", "999"))
     TAKEOUT_TABLE_ALIAS = getenv("TAKEOUT_TABLE_ALIAS", "Para llevar")
     TAKEOUT_ZONE_NAME = getenv("TAKEOUT_ZONE_NAME", "Sistema")
+    # Draft preparation only. Transmission and production are intentionally absent.
+    DTE_SCHEMA_PATH = getenv("DTE_SCHEMA_PATH")
     PRODUCT_UPLOAD_DIR = BASE_DIR / "app" / "static" / "uploads" / "products"
     BRANDING_UPLOAD_DIR = BASE_DIR / "app" / "static" / "uploads" / "branding"
 

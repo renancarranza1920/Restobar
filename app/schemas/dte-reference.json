@@ -1,0 +1,10 @@
+{
+  "document": "Factura consumidor final, tipo 01, versión 1",
+  "schema_version": 1,
+  "official_information_page": "https://factura.gob.sv/",
+  "mirror_repository": "https://github.com/herson/dte-json-schemas",
+  "mirror_commit": "01c62d14dc1126129e45ad282fca5ab18e8e7c6f",
+  "download_url": "https://raw.githubusercontent.com/herson/dte-json-schemas/01c62d14dc1126129e45ad282fca5ab18e8e7c6f/DTE-FE-v1.json",
+  "sha256": "748673c0f2d45d84e6b13a21d2ba411eb731ce199eb946dc33ca9b995571f0c1",
+  "status": "Referencia comunitaria atribuida a MH; vigencia oficial pendiente de verificar. No se redistribuyen sus bytes en este repositorio."
+}

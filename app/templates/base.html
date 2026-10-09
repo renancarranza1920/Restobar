@@ -3,13 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#f9fafb">
+    <meta name="theme-color" content="#214d3b">
     <title>{% if page_title %}{{ page_title }} | {% endif %}{{ app_name | default('Restobar') }}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='brand/restobar-mark.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css', v='inventory-search-cost-v3') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='restaurant.css', v='restaurant-2026-v1') }}">
     {% block head %}{% endblock %}
 </head>
 <body
@@ -17,7 +15,11 @@
     data-app-timezone="{{ system_preferences.timezone if system_preferences else 'America/El_Salvador' }}"
     data-date-format="{{ system_preferences.date_format if system_preferences else 'dd/mm/yyyy' }}"
     data-time-format="{{ system_preferences.time_format if system_preferences else '12h' }}"
+    data-brand-accent="{{ system_preferences.brand_accent | default('terracotta') if system_preferences else 'terracotta' }}"
+    data-motion="{{ 'enabled' if not system_preferences or system_preferences.motion_enabled | default('1') == '1' else 'reduced' }}"
+    {% if current_user.is_authenticated %}data-alerts-url="{{ url_for('api.api_service_alerts') }}"{% endif %}
 >
+    <a class="skip-link" href="#main-content">Saltar al contenido</a>
     <script>
         try {
             if (window.localStorage.getItem("restobar:sidebar-collapsed") === "true") {
@@ -28,25 +30,25 @@
         }
     </script>
     {% if current_user.is_authenticated %}
-        <button class="mobile-nav-toggle shadow-sm" type="button" data-sidebar-open aria-label="Abrir menú">
+        <button class="mobile-nav-toggle shadow-sm" type="button" data-sidebar-open aria-label="Abrir menú" aria-controls="restaurant-navigation" aria-expanded="false">
             <i class="fa-solid fa-bars"></i>
         </button>
 
         <div class="sidebar-backdrop" data-sidebar-backdrop hidden></div>
 
-        <aside class="filament-sidebar shadow-md" data-sidebar>
+        <aside class="filament-sidebar shadow-md" data-sidebar id="restaurant-navigation" aria-label="Navegación principal">
             <div class="sidebar-header border-b">
                 <a class="flex items-center gap-3 w-full" href="{{ url_for(nav_items[0].endpoint) if nav_items else '#' }}">
                     <div class="brand-avatar shadow-sm {{ 'has-image' if business_logo_url else '' }}">
                         {% if business_logo_url %}
                             <img src="{{ business_logo_url }}" alt="{{ app_name }} logo">
                         {% else %}
-                            {{ business_initial | default('R') }}
+                            <img src="{{ url_for('static', filename='brand/restobar-mark.svg') }}" alt="" class="restaurant-brand-mark">
                         {% endif %}
                     </div>
                     <div class="brand-info">
                         <h1 class="brand-title">{{ app_name | default('Restobar') }}</h1>
-                        <span class="brand-subtitle text-xs">{{ role_label(current_user.rol) if role_label else 'Administrador' }}</span>
+                        <span class="brand-subtitle text-xs">Cocina · sala · servicio</span>
                     </div>
                 </a>
                 <button class="sidebar-close" type="button" data-sidebar-close aria-label="Cerrar menú">
@@ -58,20 +60,23 @@
                 </button>
             </div>
 
-            <div
-                class="sidebar-date-badge shadow-sm mt-4"
-                data-local-current-datetime
-                data-local-format="{{ system_preferences.sidebar_clock if system_preferences else 'date' }}"
-            >
-                {{ now_label | default('17/04/2026') }}
+            <div class="sidebar-date-badge shadow-sm mt-4">
+                <i class="fa-regular fa-calendar-days" aria-hidden="true"></i>
+                <span data-local-current-datetime data-local-format="{{ system_preferences.sidebar_clock if system_preferences else 'date' }}">{{ now_label | default('') }}</span>
             </div>
 
             <nav class="sidebar-nav">
                 <ul class="nav-list">
                     {% if nav_items %}
+                        {% set navigation = namespace(group='') %}
                         {% for item in nav_items %}
+                            {% set group = item.group | default('Operación') %}
+                            {% if group != navigation.group %}
+                                <li class="nav-group-label"><span>{{ group }}</span></li>
+                                {% set navigation.group = group %}
+                            {% endif %}
                             <li>
-                                <a href="{{ url_for(item.endpoint) }}" class="nav-link {{ 'is-active shadow-sm' if request.endpoint in item.active_endpoints else '' }}" title="{{ item.label }}">
+                                <a href="{{ url_for(item.endpoint) }}" class="nav-link {{ 'is-active shadow-sm' if request.endpoint in item.active_endpoints else '' }}" title="{{ item.label }}" {% if request.endpoint in item.active_endpoints %}aria-current="page"{% endif %} data-navigation-group="{{ group }}">
                                     <i class="fa-solid {{ item.icon|default('fa-circle-dot') }} nav-link-icon" aria-hidden="true"></i>
                                     <span class="nav-link-text">{{ item.label }}</span>
                                 </a>
@@ -85,14 +90,16 @@
             </nav>
 
             <div class="sidebar-footer">
-                <div class="mb-3">
-                    <span class="user-label">Usuario actual</span>
-                    <strong class="user-name">{{ current_user.nombre_completo or current_user.nickname }}</strong>
-                    <div class="text-xs text-muted">{{ current_user.nickname }}</div>
+                <div class="sidebar-user mb-3">
+                    <span class="restaurant-user-avatar" aria-hidden="true">{{ (current_user.nombre_completo or current_user.nickname or 'R')[0] | upper }}</span>
+                    <div class="sidebar-user-copy">
+                        <strong class="user-name">{{ current_user.nombre_completo or current_user.nickname }}</strong>
+                        <span class="text-xs text-muted">{{ role_label(current_user.rol) if role_label else current_user.nickname }}</span>
+                    </div>
                 </div>
 
                 {% if user_can and user_can(current_user, 'caja') %}
-                    <div class="mb-3 bg-gray-50 p-2 rounded border border-gray-100">
+                    <div class="sidebar-cash-status mb-3 {{ 'is-open' if active_session else '' }}">
                         <span class="user-label">Estado de Caja</span>
                         <strong class="user-name {{ 'text-success' if active_session else 'text-danger' }}">
                             <i class="fa-solid fa-circle text-xs mr-1"></i> {{ 'Abierta' if active_session else 'Cerrada' }}
@@ -138,9 +145,9 @@
 
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
-                    <div class="flash-container {{ 'guest-flashes' if not current_user.is_authenticated else '' }}">
+                    <div class="flash-container {{ 'guest-flashes' if not current_user.is_authenticated else '' }}" aria-live="polite" aria-relevant="additions text">
                         {% for category, message in messages %}
-                            <div class="flash-message flash-{{ category }} shadow-sm" data-flash>
+                            <div class="flash-message flash-{{ category }} shadow-sm" data-flash role="{{ 'alert' if category == 'error' else 'status' }}">
                                 <div class="flash-icon">
                                     <i class="fa-solid {{
                                         'fa-circle-check' if category == 'success'
@@ -159,17 +166,74 @@
                 {% endif %}
             {% endwith %}
 
-            <div class="content-wrapper">
+            {% if current_user.is_authenticated %}
+            <header class="restaurant-topbar">
+                <div class="restaurant-topbar-location">
+                    <span class="restaurant-topbar-eyebrow">Tu restaurante, en orden</span>
+                    <strong>{{ page_title | default('Servicio del día', true) }}</strong>
+                </div>
+                <div class="restaurant-topbar-actions">
+                    <button class="restaurant-search-trigger" type="button" data-command-open aria-label="Buscar pantalla o acción (Control K)">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <span>¿Qué necesitas hacer?</span>
+                        <kbd>Ctrl K</kbd>
+                    </button>
+                    <div class="restaurant-notifications">
+                        <button class="restaurant-notification-trigger" type="button" data-alerts-open aria-controls="restaurant-alerts" aria-expanded="false" aria-label="Notificaciones del servicio">
+                            <i class="fa-regular fa-bell" aria-hidden="true"></i>
+                            <span class="restaurant-notification-count" data-alerts-count hidden></span>
+                        </button>
+                        <section class="restaurant-alerts-panel" id="restaurant-alerts" data-alerts-panel aria-labelledby="restaurant-alerts-title" hidden>
+                            <header><div><span class="restaurant-topbar-eyebrow">Lo que pasa ahora</span><h2 id="restaurant-alerts-title">Tu servicio al día</h2></div><button class="restaurant-icon-button" data-alerts-refresh type="button" aria-label="Actualizar notificaciones"><i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i></button></header>
+                            <div class="restaurant-alerts-list" data-alerts-list></div>
+                            <p class="restaurant-alerts-status" data-alerts-status role="status">Consultando el servicio…</p>
+                            <footer>Alertas de cocina, inventario y caja según tu acceso.</footer>
+                        </section>
+                    </div>
+                    {% if user_can and user_can(current_user, 'caja.view') %}
+                    <a href="{{ url_for('web.caja') }}" class="restaurant-cash-pill {{ 'is-open' if active_session else '' }}" title="{{ 'Caja abierta: lista para atender' if active_session else 'Abre caja para comenzar a atender' }}">
+                        <span class="status-dot" aria-hidden="true"></span>
+                        <span>Caja {{ 'abierta' if active_session else 'cerrada' }}</span>
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('web.mi_seguridad') }}" class="restaurant-topbar-avatar" aria-label="Mi perfil y seguridad" title="{{ current_user.nombre_completo or current_user.nickname }}">{{ (current_user.nombre_completo or current_user.nickname or 'R')[0] | upper }}</a>
+                </div>
+            </header>
+            {% endif %}
+
+            <div class="content-wrapper" id="main-content" tabindex="-1">
                 {% block content %}{% endblock %}
             </div>
         </main>
 
-    <div class="confirm-modal" data-confirm-modal hidden>
+    {% if current_user.is_authenticated %}
+    <dialog class="restaurant-command-dialog" data-command-dialog aria-labelledby="command-title">
+        <div class="restaurant-command-head">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <label class="sr-only" id="command-title" for="restaurant-command-input">Buscar una pantalla</label>
+            <input id="restaurant-command-input" type="search" autocomplete="off" placeholder="Buscar mesas, órdenes, menú, caja…" data-command-input>
+            <button class="restaurant-icon-button" type="button" data-command-close aria-label="Cerrar búsqueda"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+        </div>
+        <div class="restaurant-command-results" data-command-results>
+            {% for item in nav_items %}
+            <a class="restaurant-command-result" href="{{ url_for(item.endpoint) }}" data-command-result>
+                <span class="restaurant-command-result-icon"><i class="fa-solid {{ item.icon|default('fa-circle-dot') }}" aria-hidden="true"></i></span>
+                <span><strong>{{ item.label }}</strong><small>{{ item.group | default('Operación') }}</small></span>
+                <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+            </a>
+            {% endfor %}
+            <p class="restaurant-command-empty" data-command-empty hidden>No encontramos esa pantalla. Prueba con otro nombre.</p>
+        </div>
+        <div class="restaurant-command-footer"><span><kbd>↑</kbd> <kbd>↓</kbd> para recorrer · <kbd>Enter</kbd> para abrir</span><span><kbd>Esc</kbd> para cerrar</span></div>
+    </dialog>
+    {% endif %}
+
+    <div class="confirm-modal" data-confirm-modal role="dialog" aria-modal="true" aria-labelledby="restaurant-confirm-title" hidden>
         <div class="confirm-dialog shadow-lg">
             <div class="confirm-dialog-header">
                 <div>
                     <p class="confirm-dialog-kicker">Confirmación</p>
-                    <h3 class="confirm-dialog-title" data-confirm-title>¿Deseas continuar?</h3>
+                    <h3 class="confirm-dialog-title" id="restaurant-confirm-title" data-confirm-title>¿Deseas continuar?</h3>
                 </div>
                 <button class="confirm-dialog-close" type="button" data-confirm-cancel aria-label="Cerrar confirmación">
                     <i class="fa-solid fa-xmark"></i>
@@ -191,12 +255,12 @@
         </div>
     </div>
 
-    <div class="payment-modal" data-payment-modal hidden>
+    <div class="payment-modal" data-payment-modal role="dialog" aria-modal="true" aria-labelledby="restaurant-payment-title" hidden>
         <div class="payment-dialog shadow-lg">
             <div class="payment-dialog-header">
                 <div>
                     <p class="payment-dialog-kicker">Cobro</p>
-                    <h3 class="payment-dialog-title" data-payment-title>Registrar pago</h3>
+                    <h3 class="payment-dialog-title" id="restaurant-payment-title" data-payment-title>Registrar pago</h3>
                 </div>
                 <button class="payment-dialog-close" type="button" data-payment-cancel aria-label="Cerrar cobro">
                     <i class="fa-solid fa-xmark"></i>
@@ -248,6 +312,7 @@
     </div>
 
     <script src="{{ url_for('static', filename='app.js', v='inventory-search-cost-v3') }}"></script>
+    <script src="{{ url_for('static', filename='restaurant.js', v='restaurant-2026-v1') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

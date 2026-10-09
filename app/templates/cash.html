@@ -14,6 +14,10 @@
             </p>
         </div>
 
+        <div class="page-actions">
+        {% if user_can(current_user, 'facturacion.view') %}
+            <a class="button button-primary" href="{{ url_for('billing.index') }}"><i class="fa-solid fa-file-invoice-dollar"></i> Facturación</a>
+        {% endif %}
         {% if user_can(current_user, 'reportes') %}
             <div>
                 <a class="button button-secondary hover-lift shadow-sm" href="{{ url_for('web.reportes') }}">
@@ -21,6 +25,7 @@
                 </a>
             </div>
         {% endif %}
+        </div>
     </header>
 
     <section class="filament-stats-grid mb-6">

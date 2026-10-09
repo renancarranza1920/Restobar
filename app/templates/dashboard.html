@@ -1,233 +1,96 @@
 {% extends "base.html" %}
 
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='menu.css', v='restaurant-2026-1') }}">
+{% endblock %}
+
 {% block content %}
-<div class="filament-dashboard p-4 md:p-6">
+<div class="restaurant-home restaurant-page">
+    <header class="restaurant-page-header">
+        <div>
+            <p class="restaurant-eyebrow"><span class="restaurant-dot" aria-hidden="true"></span> Tu restaurante, en orden</p>
+            <h1>Hola, {{ current_user.nombre or current_user.nickname }}.</h1>
+            <p class="restaurant-subtitle">Cada buen servicio empieza aquí. Este es el pulso de tu restaurante.</p>
+        </div>
+        <div class="restaurant-header-date"><i class="fa-regular fa-calendar" aria-hidden="true"></i><span data-local-current-datetime data-local-format="date">{{ now_label }}</span></div>
+    </header>
 
-    <section class="welcome-section mb-6">
-        <article class="welcome-card panel">
-            <div class="welcome-content">
-                <div class="avatar-circle shadow-sm">
-                    {{ current_user.nickname[:1]|upper if current_user.nickname else 'R' }}
-                </div>
-                <div>
-                    <h2 class="welcome-title text-lg font-bold">Bienvenida/o, {{ current_user.nickname or 'Usuario' }}</h2>
-                    <p class="welcome-subtitle text-muted text-sm">Resumen operativo de hoy</p>
-                </div>
+    <section class="service-hero" aria-labelledby="service-hero-title">
+        <div class="service-hero-copy">
+            <span class="service-hero-label"><i class="fa-solid fa-utensils" aria-hidden="true"></i> {{ app_name }}</span>
+            <h2 id="service-hero-title">Sabor en la mesa.<br>Orden en cada detalle.</h2>
+            <p>{{ business_tagline or 'De la primera comanda al último cobro, todo tu equipo en la misma sintonía.' }}</p>
+            <div class="service-hero-actions">
+                {% if user_can(current_user, 'ordenes.create') and user_can(current_user, 'ordenes.view') %}<a class="button service-hero-primary" href="{{ url_for('web.ordenes') }}#new-order-form"><i class="fa-solid fa-plus" aria-hidden="true"></i> Nueva orden</a>
+                {% elif user_can(current_user, 'cocina.view') %}<a class="button service-hero-primary" href="{{ url_for('web.cocina') }}"><i class="fa-solid fa-fire-burner" aria-hidden="true"></i> Abrir cocina</a>{% endif %}
+                {% if user_can(current_user, 'productos.view') %}<a class="button service-hero-secondary" href="{{ url_for('web.productos') }}">Explorar la carta <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>{% endif %}
             </div>
-            <form class="welcome-logout-form" method="post" action="{{ url_for('web.logout') }}">
-                <button class="button button-ghost button-small text-danger logout-btn hover-lift" type="submit">
-                    <i class="fa-solid fa-arrow-right-from-bracket"></i> Salir
-                </button>
-            </form>
-        </article>
+        </div>
+        <div class="service-hero-art" aria-hidden="true"><img src="{{ url_for('static', filename='brand/food-service.svg') }}" alt="" width="480" height="350"><span class="service-art-note"><i class="fa-solid fa-heart" aria-hidden="true"></i> Hecho para servir mejor</span></div>
     </section>
 
-    <section class="filament-stats-grid mb-6">
-        
-        {% if user_can(current_user, 'ordenes.view') %}
-        <a class="stat-card panel hover-lift dashboard-action-card" href="{{ url_for('web.ordenes', fecha=dashboard_date) }}">
-            <div class="stat-header">
-                <div class="stat-icon bg-success-light text-success">
-                    <i class="fa-solid fa-receipt"></i>
-                </div>
-                <h3 class="stat-label text-muted">Órdenes de Hoy</h3>
-            </div>
-            <div class="stat-value mt-3">{{ metrics.ordenes_pagadas_hoy + metrics.ordenes_abiertas }}</div>
-            <p class="stat-desc text-success mt-1 font-medium text-xs">
-                <i class="fa-solid fa-arrow-trend-up"></i> Total registradas hoy
-            </p>
-        </a>
-        {% endif %}
-
-        {% if user_can(current_user, 'cocina.view') or user_can(current_user, 'ordenes.deliver') %}
-        <a class="stat-card panel hover-lift dashboard-action-card" href="{{ url_for('web.cocina') if user_can(current_user, 'cocina.view') else url_for('web.ordenes', estado='abierta') }}">
-            <div class="stat-header">
-                <div class="stat-icon bg-warning-light text-warning">
-                    <i class="fa-solid fa-fire-burner"></i>
-                </div>
-                <h3 class="stat-label text-muted">Pendientes</h3>
-            </div>
-            <div class="stat-value mt-3">{{ metrics.pendientes_cocina + metrics.listos_entrega }}</div>
-            <p class="stat-desc text-warning mt-1 font-medium text-xs">
-                <i class="fa-solid fa-clock"></i> Cocina / Servicio
-            </p>
-        </a>
-        {% endif %}
-
+    <section class="restaurant-metrics" aria-label="Resumen del restaurante">
         {% if user_can(current_user, 'caja.view') or user_can(current_user, 'reportes.view') %}
-        <a class="stat-card panel hover-lift dashboard-action-card" href="{{ url_for('web.reportes') if user_can(current_user, 'reportes.view') else url_for('web.caja') }}">
-            <div class="stat-header">
-                <div class="stat-icon bg-primary-light text-primary">
-                    <i class="fa-solid fa-sack-dollar"></i>
-                </div>
-                <h3 class="stat-label text-muted">Ingresos de Hoy</h3>
-            </div>
-            <div class="stat-value mt-3">{{ metrics.ventas_hoy|money }}</div>
-            <p class="stat-desc text-primary mt-1 font-medium text-xs">
-                <i class="fa-solid fa-chart-line"></i> Totales cobrados
-            </p>
-        </a>
+        <a class="restaurant-metric" href="{{ url_for('web.reportes') if user_can(current_user, 'reportes.view') else url_for('web.caja') }}"><div class="restaurant-metric-top"><span>Ventas de hoy</span><span class="metric-icon metric-icon-forest"><i class="fa-solid fa-sack-dollar" aria-hidden="true"></i></span></div><strong>{{ metrics.ventas_hoy|money }}</strong><span class="restaurant-metric-note">{{ metrics.ordenes_pagadas_hoy }} orden{{ '' if metrics.ordenes_pagadas_hoy == 1 else 'es' }} pagada{{ '' if metrics.ordenes_pagadas_hoy == 1 else 's' }}</span></a>
         {% endif %}
-
+        {% if user_can(current_user, 'ordenes.view') %}
+        <a class="restaurant-metric" href="{{ url_for('web.ordenes', estado='abierta') }}"><div class="restaurant-metric-top"><span>Órdenes abiertas</span><span class="metric-icon metric-icon-terracotta"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span></div><strong>{{ metrics.ordenes_abiertas }}</strong><span class="restaurant-metric-note">Cuentas en servicio actualmente</span></a>
+        {% endif %}
+        {% if user_can(current_user, 'cocina.view') or user_can(current_user, 'ordenes.deliver') %}
+        <a class="restaurant-metric" href="{{ url_for('web.cocina') if user_can(current_user, 'cocina.view') else url_for('web.ordenes', estado='abierta') }}"><div class="restaurant-metric-top"><span>En preparación</span><span class="metric-icon metric-icon-gold"><i class="fa-solid fa-fire-burner" aria-hidden="true"></i></span></div><strong>{{ metrics.pendientes_cocina }}</strong><span class="restaurant-metric-note">{{ metrics.listos_entrega }} producto{{ '' if metrics.listos_entrega == 1 else 's' }} listo{{ '' if metrics.listos_entrega == 1 else 's' }} para entregar</span></a>
+        {% endif %}
         {% if user_can(current_user, 'mesas.view') %}
-        <a class="stat-card panel hover-lift dashboard-action-card" href="{{ url_for('web.mesas') }}">
-            <div class="stat-header">
-                <div class="stat-icon bg-gray-light text-muted">
-                    <i class="fa-solid fa-chair"></i>
-                </div>
-                <h3 class="stat-label text-muted">Ocupación</h3>
-            </div>
-            <div class="stat-value mt-3">{{ metrics.mesas_ocupadas }} / {{ metrics.mesas_total }}</div>
-            <p class="stat-desc text-muted mt-1 font-medium text-xs">
-                Mesas en uso actualmente
-            </p>
-        </a>
+        <a class="restaurant-metric" href="{{ url_for('web.mesas') }}"><div class="restaurant-metric-top"><span>Mesas ocupadas</span><span class="metric-icon metric-icon-forest"><i class="fa-solid fa-chair" aria-hidden="true"></i></span></div><strong>{{ metrics.mesas_ocupadas }} <small>/ {{ metrics.mesas_total }}</small></strong><span class="restaurant-metric-note">{{ metrics.mesas_total - metrics.mesas_ocupadas }} disponibles en el salón</span></a>
         {% endif %}
-
     </section>
 
-    <section class="filament-content-grid">
-        
-        <div class="filament-col">
+    <section class="restaurant-quick-actions" aria-label="Accesos para el servicio">
+        {% if user_can(current_user, 'mesas.view') %}<a class="restaurant-quick-action" href="{{ url_for('web.mesas') }}"><span class="quick-action-icon"><i class="fa-solid fa-chair" aria-hidden="true"></i></span><span><strong>El salón</strong><small>Mesas y atención</small></span><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>{% endif %}
+        {% if user_can(current_user, 'cocina.view') %}<a class="restaurant-quick-action" href="{{ url_for('web.cocina') }}"><span class="quick-action-icon"><i class="fa-solid fa-fire-burner" aria-hidden="true"></i></span><span><strong>La cocina</strong><small>Comandas por preparar</small></span><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>{% endif %}
+        {% if user_can(current_user, 'caja.view') %}<a class="restaurant-quick-action" href="{{ url_for('web.caja') }}"><span class="quick-action-icon"><i class="fa-solid fa-cash-register" aria-hidden="true"></i></span><span><strong>La caja</strong><small>{{ 'Sesión abierta · gestionar cobros' if active_session else 'Sin sesión · abrir para vender' }}</small></span><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>{% endif %}
+        {% if user_can(current_user, 'productos.view') %}<a class="restaurant-quick-action" href="{{ url_for('web.productos') }}"><span class="quick-action-icon"><i class="fa-solid fa-book-open" aria-hidden="true"></i></span><span><strong>La carta</strong><small>Sabores y disponibilidad</small></span><i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>{% endif %}
+    </section>
+
+    <div class="restaurant-home-columns">
+        <div class="restaurant-home-primary">
             {% if user_can(current_user, 'ordenes.view') %}
-            <article class="panel mb-6">
-                <div class="panel-header border-b bg-gray-50">
-                    <h3 class="panel-title font-bold"><i class="fa-solid fa-list-check mr-2"></i> Operación Reciente</h3>
-                    <a class="text-primary text-sm font-medium hover-underline" href="{{ url_for('web.ordenes') }}">Ver todas</a>
+            <section class="restaurant-section" aria-labelledby="recent-orders-title">
+                <header class="restaurant-section-header"><div><p class="restaurant-eyebrow">En movimiento</p><h2 id="recent-orders-title">Últimas órdenes</h2></div><a class="restaurant-text-link" href="{{ url_for('web.ordenes') }}">Ver órdenes <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></header>
+                {% if recent_orders %}
+                <div class="restaurant-order-list">
+                    {% for order in recent_orders %}
+                    <a class="restaurant-order-row" href="{{ url_for('web.detalle_orden', order_id=order.id) }}"><span class="order-row-icon"><i class="fa-solid fa-utensils" aria-hidden="true"></i></span><span class="order-row-main"><strong>Orden #{{ order.id }} <span class="order-row-table">{{ order.mesa_etiqueta if order.mesa else 'Para llevar' }}</span></strong><small>{{ order.nombre_cliente or 'Cliente sin nombre' }} · <span data-local-datetime="{{ order.created_at|datetime_iso }}">{{ order.created_at|datetime_short }}</span></small></span><span class="badge badge-{{ order.estado }}">{{ 'En servicio' if order.estado == 'abierta' else ('Pagada' if order.estado == 'pagada' else 'Cancelada') }}</span><strong class="order-row-total">{{ order.total|money }}</strong><i class="fa-solid fa-chevron-right order-row-chevron" aria-hidden="true"></i></a>
+                    {% endfor %}
                 </div>
-                <div class="panel-body p-0">
-                    {% if recent_orders %}
-                        <div class="table-wrap no-border">
-                            <table class="filament-table">
-                                <thead>
-                                    <tr>
-                                        <th>Orden</th>
-                                        <th>Mesa/Cliente</th>
-                                        <th>Estado</th>
-                                        <th class="text-right">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for order in recent_orders %}
-                                        <tr class="hover-row">
-                                            <td class="font-bold text-sm">#{{ order.id }}</td>
-                                            <td>
-                                                <div class="text-sm font-medium">{{ order.mesa_etiqueta if order.mesa else 'Para llevar' }}</div>
-                                                <div class="text-xs text-muted">{{ order.nombre_cliente or 'Sin nombre' }}</div>
-                                            </td>
-                                            <td>
-                                                <span class="badge badge-{{ order.estado|lower }} shadow-sm">{{ order.estado }}</span>
-                                            </td>
-                                            <td class="text-right font-bold">{{ order.total|money }}</td>
-                                        </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    {% else %}
-                        <div class="empty-state p-8 text-center">
-                            <div class="empty-icon bg-gray-light text-muted mx-auto mb-3">
-                                <i class="fa-solid fa-inbox text-2xl"></i>
-                            </div>
-                            <p class="text-sm font-medium text-muted">No hay órdenes recientes hoy.</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </article>
+                {% else %}<div class="restaurant-empty-state"><span class="restaurant-empty-icon"><i class="fa-solid fa-bell-concierge" aria-hidden="true"></i></span><h3>El próximo servicio empieza contigo</h3><p>Las órdenes aparecerán aquí cuando las registres.</p>{% if user_can(current_user, 'ordenes.create') %}<a class="button button-primary" href="{{ url_for('web.ordenes') }}#new-order-form">Crear la primera orden <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>{% endif %}</div>{% endif %}
+            </section>
             {% endif %}
 
+            {% if user_can(current_user, 'cocina.view') or user_can(current_user, 'ordenes.deliver') %}
+            <section class="restaurant-section" aria-labelledby="service-flow-title"><header class="restaurant-section-header"><div><p class="restaurant-eyebrow">Del pedido a la mesa</p><h2 id="service-flow-title">Tu servicio, paso a paso</h2></div><span class="restaurant-section-note">Estado actual</span></header>
+                <div class="restaurant-service-flow"><div class="service-step"><span class="service-step-number">01</span><i class="fa-solid fa-receipt" aria-hidden="true"></i><strong>{{ metrics.ordenes_abiertas }}</strong><span>Órdenes abiertas</span></div><div class="service-step"><span class="service-step-number">02</span><i class="fa-solid fa-fire-burner" aria-hidden="true"></i><strong>{{ metrics.pendientes_cocina }}</strong><span>Productos en cocina</span></div><div class="service-step"><span class="service-step-number">03</span><i class="fa-solid fa-bell-concierge" aria-hidden="true"></i><strong>{{ metrics.listos_entrega }}</strong><span>Productos listos</span></div></div>
+                {% if ready_for_delivery_items and user_can(current_user, 'ordenes.view') %}<div class="restaurant-ready-list"><p><i class="fa-solid fa-check-circle" aria-hidden="true"></i> Listos para salir</p>{% for item in ready_for_delivery_items %}<a href="{{ url_for('web.detalle_orden', order_id=item.orden_id) }}"><span>{{ item.cantidad }} × {{ item.producto.nombre }}</span><strong>Orden #{{ item.orden_id }} <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></strong></a>{% endfor %}</div>{% endif %}
+            </section>
+            {% endif %}
+        </div>
+
+        <aside class="restaurant-home-secondary" aria-label="Más información del servicio">
             {% if user_can(current_user, 'reportes.view') or user_can(current_user, 'productos.view') %}
-            <article class="panel">
-                <div class="panel-header border-b bg-gray-50">
-                    <h3 class="panel-title font-bold"><i class="fa-solid fa-ranking-star mr-2"></i> Lo más vendido hoy</h3>
-                </div>
-                <div class="panel-body p-0">
-                    {% if metrics.top_products %}
-                        <ul class="filament-list">
-                            {% for row in metrics.top_products %}
-                                <li class="list-item hover-row">
-                                    <div class="flex items-center gap-3">
-                                        <div class="product-avatar shadow-sm font-bold text-primary bg-primary-light">
-                                            {{ row.product.nombre[:1] }}
-                                        </div>
-                                        <div>
-                                            <div class="text-sm font-bold">{{ row.product.nombre }}</div>
-                                            <div class="text-xs text-muted">{{ row.quantity }} uds vendidas</div>
-                                        </div>
-                                    </div>
-                                    <div class="text-sm font-bold text-gray-800">{{ row.sales|money }}</div>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <div class="empty-state p-8 text-center">
-                            <p class="text-sm text-muted">Aún no hay ventas de productos.</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </article>
+            <section class="restaurant-section restaurant-favorites" aria-labelledby="favorites-title"><header class="restaurant-section-header"><div><p class="restaurant-eyebrow">Los favoritos</p><h2 id="favorites-title">Más vendidos hoy</h2></div><i class="fa-solid fa-star restaurant-section-decoration" aria-hidden="true"></i></header>
+                {% if metrics.top_products %}<ol class="restaurant-favorite-list">{% for row in metrics.top_products %}<li><span class="favorite-rank">{{ '%02d'|format(loop.index) }}</span><div><strong>{{ row.product.nombre }}</strong><small>{{ row.quantity }} unidad{{ '' if row.quantity == 1 else 'es' }} vendida{{ '' if row.quantity == 1 else 's' }}</small></div>{% if user_can(current_user, 'reportes.view') or user_can(current_user, 'caja.view') %}<strong class="favorite-sales">{{ row.sales|money }}</strong>{% endif %}</li>{% endfor %}</ol>
+                {% else %}<div class="restaurant-empty-state restaurant-empty-small"><img src="{{ url_for('static', filename='brand/food-plate.svg') }}" alt="" width="160" height="110"><h3>¿Cuál será el favorito de hoy?</h3><p>Las ventas pagadas revelarán los platos más pedidos.</p>{% if user_can(current_user, 'productos.view') %}<a class="restaurant-text-link" href="{{ url_for('web.productos') }}">Ver la carta <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>{% endif %}</div>{% endif %}
+            </section>
             {% endif %}
-        </div>
-
-        <div class="filament-col">
             {% if user_can(current_user, 'caja.view') or user_can(current_user, 'reportes.view') %}
-            <article class="panel mb-6">
-                <div class="panel-header border-b bg-gray-50">
-                    <h3 class="panel-title font-bold"><i class="fa-solid fa-cash-register mr-2"></i> Últimos Pagos</h3>
-                </div>
-                <div class="panel-body p-0">
-                    {% if recent_payments %}
-                        <ul class="filament-list">
-                            {% for payment in recent_payments %}
-                                <li class="list-item hover-row">
-                                    <div>
-                                        <div class="text-sm font-bold capitalize">{{ payment.metodo }}</div>
-                                        <div class="text-xs text-muted">Orden #{{ payment.orden_id }} • <span data-local-datetime="{{ payment.created_at|datetime_iso }}">{{ payment.created_at|datetime_short }}</span></div>
-                                    </div>
-                                    <div class="text-right">
-                                        <div class="text-sm font-bold text-success bg-success-light px-2 py-1 rounded-md">+{{ payment.total_cobrado|money }}</div>
-                                        {% if payment.propina and payment.propina > 0 %}
-                                            <div class="text-xs text-muted mt-1">Propina {{ payment.propina|money }}</div>
-                                        {% endif %}
-                                    </div>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <div class="empty-state p-6 text-center">
-                            <p class="text-sm text-muted">No se han registrado pagos aún.</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </article>
+            <section class="restaurant-section" aria-labelledby="payments-title"><header class="restaurant-section-header"><div><p class="restaurant-eyebrow">Cuentas al día</p><h2 id="payments-title">Últimos cobros</h2></div><i class="fa-solid fa-wallet restaurant-section-decoration" aria-hidden="true"></i></header>
+                {% if recent_payments %}<ul class="restaurant-payment-list">{% for payment in recent_payments[:4] %}<li><span class="payment-method-icon"><i class="fa-solid {{ 'fa-money-bill-wave' if payment.metodo == 'efectivo' else 'fa-credit-card' }}" aria-hidden="true"></i></span><div><strong>{{ payment.metodo|capitalize }}</strong><small>Orden #{{ payment.orden_id }} · <span data-local-datetime="{{ payment.created_at|datetime_iso }}">{{ payment.created_at|datetime_short }}</span></small></div><strong class="payment-amount">{{ payment.total_cobrado|money }}</strong></li>{% endfor %}</ul>
+                {% else %}<div class="restaurant-empty-state restaurant-empty-small"><span class="restaurant-empty-icon"><i class="fa-solid fa-wallet" aria-hidden="true"></i></span><h3>Aún no hay cobros</h3><p>Los pagos registrados aparecerán aquí.</p>{% if user_can(current_user, 'caja.view') %}<a class="restaurant-text-link" href="{{ url_for('web.caja') }}">Ir a caja <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>{% endif %}</div>{% endif %}
+            </section>
             {% endif %}
-
             {% if metrics.low_stock_products and user_can(current_user, 'inventario.view') %}
-                <article class="panel border-danger shadow-danger">
-                    <div class="panel-header border-b bg-danger-light">
-                        <h3 class="panel-title text-danger font-bold flex items-center gap-2">
-                            <i class="fa-solid fa-triangle-exclamation"></i> Stock Crítico
-                        </h3>
-                    </div>
-                    <div class="panel-body p-0">
-                        <ul class="filament-list">
-                            {% for product in metrics.low_stock_products %}
-                                <li class="list-item hover-row bg-red-50">
-                                    <div>
-                                        <div class="text-sm font-bold">{{ product.nombre }}</div>
-                                        <div class="text-xs text-danger">{{ product.categoria.nombre if product.categoria else 'General' }}</div>
-                                    </div>
-                                    <div class="text-sm font-bold text-danger bg-white px-2 py-1 rounded shadow-sm border border-red-100">
-                                        {{ product.stock_actual }} unidad{{ '' if product.stock_actual == 1 else 'es' }}
-                                    </div>
-                                </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                </article>
+            <section class="restaurant-section restaurant-stock-section" aria-labelledby="stock-title"><header class="restaurant-section-header"><div><p class="restaurant-eyebrow">Antes de que se termine</p><h2 id="stock-title">Stock por reponer</h2></div><i class="fa-solid fa-triangle-exclamation restaurant-section-decoration" aria-hidden="true"></i></header><ul class="restaurant-stock-list">{% for product in metrics.low_stock_products %}<li><span><strong>{{ product.nombre }}</strong><small>{{ product.categoria.nombre if product.categoria else 'Sin categoría' }}</small></span><strong class="restaurant-stock-count">{{ product.stock_actual }} uds.</strong></li>{% endfor %}</ul><a class="restaurant-section-footer-link" href="{{ url_for('web.inventario') }}">Revisar inventario <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></section>
             {% endif %}
-        </div>
-
-    </section>
+        </aside>
+    </div>
 </div>
 {% endblock %}

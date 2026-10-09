@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% set page_title = 'Perfil fiscal' %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='billing.css') }}">{% endblock %}
+{% block content %}
+<div class="filament-dashboard p-4 md:p-6 billing-page">
+    <header class="page-header"><div><p class="billing-eyebrow">Facturación · emisor</p><h1>La identidad fiscal de tu restaurante</h1><p class="text-muted">Usa los datos de tu inscripción y los códigos vigentes del Ministerio de Hacienda.</p></div><a class="button button-ghost" href="{{ url_for('billing.index') }}">Volver a facturación</a></header>
+    <aside class="billing-notice"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><p>Este perfil guarda datos fiscales del negocio. Certificados, contraseñas y tokens se configurarán de forma segura al integrar Hacienda; no los escribas en estos campos.</p></aside>
+    <form method="post" class="panel">
+        <input type="hidden" name="billing_csrf" value="{{ billing_csrf_token() }}">
+        <div class="panel-header"><div><h2 class="panel-title">Datos del contribuyente</h2><p class="text-muted">Todos los campos son obligatorios salvo los marcados como opcionales.</p></div></div>
+        <div class="panel-body billing-form-grid">
+            {% for key, label, maxlength in fields %}<div class="billing-field {{ 'billing-field-wide' if key in ['nombre', 'complemento', 'descActividad'] else '' }}"><label for="fiscal-{{ key }}">{{ label }}</label><input id="fiscal-{{ key }}" name="{{ key }}" value="{{ profile.get(key, '') }}" maxlength="{{ maxlength }}" {% if key not in ['nombreComercial', 'codEstableMH', 'codPuntoVentaMH'] %}required{% endif %} {% if key == 'correo' %}type="email"{% endif %} {% if key in ['nit', 'nrc', 'departamento', 'municipio', 'codActividad'] %}inputmode="numeric"{% endif %}></div>{% endfor %}
+            <div class="billing-field"><label for="fiscal-tipo">Tipo de establecimiento · CAT-009</label><select id="fiscal-tipo" name="tipoEstablecimiento" required><option value="">Selecciona el código de tu inscripción MH</option>{% for code in ['01', '02', '04', '07', '20'] %}<option value="{{ code }}" {% if profile.get('tipoEstablecimiento') == code %}selected{% endif %}>{{ code }} · según inscripción MH</option>{% endfor %}</select><small>Verifica el significado del código en el catálogo oficial vigente.</small></div>
+            <div class="billing-field-wide billing-notice"><div><strong>Una regla clara para tus precios</strong><label class="billing-check"><input type="checkbox" name="precios_iva_incluido" value="1" {% if profile.get('precios_iva_incluido') %}checked{% endif %} required><span>Confirmo que los precios de venta ya incluyen IVA del 13 %. Este preparador separará el IVA sin aumentarlos.</span></label><p>Valida con tu contador si tus productos requieren impuestos adicionales o un tratamiento diferente.</p></div></div>
+        </div>
+        <div class="billing-form-actions"><a class="button button-ghost" href="{{ url_for('billing.index') }}">Cancelar</a><button class="button button-primary" type="submit"><i class="fa-solid fa-check" aria-hidden="true"></i> Guardar perfil fiscal</button></div>
+    </form>
+</div>
+{% endblock %}

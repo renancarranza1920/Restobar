@@ -53,9 +53,11 @@ MODULE_PERMISSION_ALIASES = {
     "reportes": "reportes.view",
     "auditoria": "auditoria.view",
     "preferencias": "preferencias.view",
+    "facturacion": "facturacion.view",
 }
 
 FEATURE_DEFINITIONS = [
+    {"key": "facturacion", "label": "Facturación electrónica", "description": "Preparar documentos tributarios electrónicos de El Salvador.", "group": "Finanzas"},
     {
         "key": "dashboard",
         "label": "Inicio",
@@ -131,6 +133,9 @@ FEATURE_DEFINITIONS = [
 ]
 
 PERMISSION_DEFINITIONS = [
+    {"key": "facturacion.view", "label": "Ver facturación", "description": "Consultar documentos y estado de preparación fiscal.", "group": "Facturación"},
+    {"key": "facturacion.create", "label": "Preparar DTE", "description": "Crear borradores de facturas desde órdenes pagadas.", "group": "Facturación"},
+    {"key": "facturacion.configure", "label": "Configurar emisor", "description": "Actualizar los datos fiscales del negocio.", "group": "Facturación"},
     {"key": "dashboard.view", "label": "Ver inicio", "description": "Ver el panel inicial adaptado al rol.", "group": "General"},
     {"key": "mesas.view", "label": "Ver mesas", "description": "Consultar mesas, zonas ocupadas y limpieza.", "group": "Mesas"},
     {"key": "mesas.create", "label": "Crear mesas", "description": "Registrar nuevas mesas.", "group": "Mesas"},
@@ -190,10 +195,16 @@ DEFAULT_ROLE_DETAILS = {
         "nombre": "Administrador",
         "descripcion": "Acceso completo a todas las areas del sistema.",
     },
+    "mesero": {"nombre": "Servicio de mesas", "descripcion": "Atender mesas, tomar pedidos y entregar platos."},
+    "cocina": {"nombre": "Cocina", "descripcion": "Consultar y preparar comandas del restaurante."},
+    "cajero": {"nombre": "Caja", "descripcion": "Gestionar caja, cobrar y preparar facturas."},
 }
 
 DEFAULT_FEATURES_BY_ROLE = {
     ADMIN_ROLE_CODE: set(ALL_PERMISSION_KEYS),
+    "mesero": {"dashboard.view", "mesas.view", "ordenes.view", "ordenes.create", "ordenes.items", "ordenes.deliver", "ordenes.ticket", "productos.view", "security.change_password"},
+    "cocina": {"cocina.view", "cocina.prepare", "security.change_password"},
+    "cajero": {"dashboard.view", "mesas.view", "ordenes.view", "ordenes.create", "ordenes.items", "ordenes.ticket", "productos.view", "caja.view", "caja.open", "caja.close", "caja.movements", "caja.charge", "facturacion.view", "facturacion.create", "security.change_password"},
 }
 
 FEATURES_BY_ROLE = DEFAULT_FEATURES_BY_ROLE
@@ -316,6 +327,27 @@ NAV_ITEMS = [
 ]
 
 
+NAV_ITEMS.append({
+    "feature": "facturacion",
+    "label": "Facturación",
+    "icon": "fa-file-invoice-dollar",
+    "endpoint": "billing.index",
+    "active_endpoints": {"billing.index", "billing.setup", "billing.new", "billing.detail", "billing.download"},
+})
+_NAV_ORDER = ["dashboard", "mesas", "ordenes", "cocina", "productos", "categorias", "inventario", "caja", "facturacion", "reportes", "zonas", "usuarios", "preferencias", "auditoria"]
+_NAV_GROUPS = {
+    "dashboard": "Restaurante", "mesas": "Restaurante", "ordenes": "Restaurante", "cocina": "Restaurante",
+    "productos": "Carta e inventario", "categorias": "Carta e inventario", "inventario": "Carta e inventario",
+    "caja": "Administración", "facturacion": "Administración", "reportes": "Administración",
+    "zonas": "Configuración", "usuarios": "Configuración", "preferencias": "Configuración", "auditoria": "Configuración",
+}
+NAV_ITEMS = sorted(NAV_ITEMS, key=lambda item: _NAV_ORDER.index(item["feature"]))
+for _nav_item in NAV_ITEMS:
+    _nav_item["group"] = _NAV_GROUPS[_nav_item["feature"]]
+    if _nav_item["feature"] == "productos":
+        _nav_item.update(label="Nuestra carta", icon="fa-utensils")
+
+
 def money(value):
     if value is None or value == "":
         return ZERO
@@ -337,7 +369,8 @@ def parse_decimal(value, default=ZERO):
         return default
 
     try:
-        return money(cleaned)
+        parsed = Decimal(cleaned)
+        return money(parsed) if parsed.is_finite() else default
     except (InvalidOperation, ValueError):
         return default
 
@@ -406,6 +439,8 @@ SYSTEM_PREFERENCE_KEYS = {
     "sidebar_clock",
     "default_theme",
     "ticket_footer",
+    "brand_accent",
+    "motion_enabled",
 }
 DATE_FORMAT_PATTERNS = {
     "dd/mm/yyyy": "%d/%m/%Y",
@@ -450,7 +485,7 @@ def valid_timezone_name(value):
 def default_system_preferences():
     return {
         "business_name": "Restobar",
-        "business_tagline": "Operacion clara para tu restaurante",
+        "business_tagline": "Buen servicio, de la cocina a la mesa",
         "business_logo_url": "",
         "timezone": configured_timezone_name(),
         "date_format": "dd/mm/yyyy",
@@ -458,6 +493,8 @@ def default_system_preferences():
         "sidebar_clock": "date",
         "default_theme": "light",
         "ticket_footer": "Gracias por su compra.",
+        "brand_accent": "terracotta",
+        "motion_enabled": "1",
     }
 
 
@@ -517,6 +554,8 @@ def normalize_system_preferences(values=None):
         "sidebar_clock": sidebar_clock,
         "default_theme": default_theme_value,
         "ticket_footer": ticket_footer,
+        "brand_accent": raw_values.get("brand_accent") if raw_values.get("brand_accent") in {"terracotta", "olive", "charcoal"} else defaults["brand_accent"],
+        "motion_enabled": "1" if bool_from_form(raw_values.get("motion_enabled")) else "0",
     }
 
 
@@ -564,6 +603,11 @@ def system_preference_choices():
         "themes": [
             {"value": "light", "label": "Claro"},
             {"value": "dark", "label": "Oscuro"},
+        ],
+        "brand_accents": [
+            {"value": "terracotta", "label": "Terracota · Cocina cálida"},
+            {"value": "olive", "label": "Oliva · Mercado fresco"},
+            {"value": "charcoal", "label": "Carbón · Parrilla urbana"},
         ],
         "timezones": [
             {"value": value, "label": value.replace("_", " ")}
@@ -782,6 +826,7 @@ def default_endpoint_for_user(user):
         ("productos", "web.productos"),
         ("inventario", "web.inventario"),
         ("reportes", "web.reportes"),
+        ("facturacion", "billing.index"),
         ("usuarios", "web.usuarios"),
         ("preferencias", "web.preferencias"),
     ]
@@ -857,11 +902,6 @@ def bootstrap_roles_permissions():
         Rol.__table__.create(db.engine)
 
     changed = False
-    legacy_roles = Rol.query.filter(Rol.codigo.in_(LEGACY_ADMIN_ROLE_CODES)).all()
-    for legacy_role in legacy_roles:
-        db.session.delete(legacy_role)
-        changed = True
-
     for code, details in DEFAULT_ROLE_DETAILS.items():
         rol = db.session.get(Rol, code)
         if rol is None:
@@ -889,12 +929,6 @@ def bootstrap_roles_permissions():
             if target_permissions != rol.permisos:
                 rol.permisos = target_permissions
                 changed = True
-
-    seeded_role_codes = {"cajero", "mesero", "cocina"}
-    seeded_roles = Rol.query.filter(Rol.codigo.in_(seeded_role_codes)).all()
-    for seeded_role in seeded_roles:
-        db.session.delete(seeded_role)
-        changed = True
 
     if changed:
         db.session.commit()
@@ -1704,7 +1738,7 @@ def get_report_snapshot(start_date, end_date):
 def get_dashboard_metrics():
     today = local_today()
     today_report = get_report_snapshot(today, today)
-    mesas = Mesa.query.all()
+    mesas = Mesa.query.filter(Mesa.id != current_app.config["TAKEOUT_TABLE_ID"]).all()
     pendientes_cocina = (
         OrdenItem.query.join(OrdenItem.producto)
         .join(Producto.categoria)

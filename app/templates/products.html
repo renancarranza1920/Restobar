@@ -1,127 +1,77 @@
 {% extends "base.html" %}
 
-{% block content %}
-<div class="filament-dashboard p-4 md:p-6">
-    <header class="page-header">
-        <div>
-            <p class="text-xs font-bold text-primary uppercase tracking-wide mb-1">Catálogo</p>
-            <h1 class="text-2xl font-bold text-gray-800">
-                <i class="fa-solid fa-box-open mr-2 text-muted"></i> Productos
-            </h1>
-            <p class="text-sm text-muted mt-1">Consulta catálogo, disponibilidad e inventario crítico sin mezclarlo con el formulario.</p>
-        </div>
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='menu.css', v='restaurant-2026-1') }}">
+{% endblock %}
 
-        <div class="page-actions">
-            <a class="button button-secondary hover-lift shadow-sm" href="{{ url_for('web.exportar_reporte', kind='productos') }}">
-                <i class="fa-solid fa-file-pdf mr-2"></i> PDF
-            </a>
-            {% if user_can(current_user, 'categorias') %}
-                <a class="button button-ghost hover-lift shadow-sm border-gray-200" href="{{ url_for('web.categorias') }}">
-                    <i class="fa-solid fa-tags mr-2"></i> Categorias
-                </a>
-            {% endif %}
-            <a class="button button-primary hover-lift shadow-sm" href="{{ url_for('web.nuevo_producto') }}">
-                <i class="fa-solid fa-plus mr-2"></i> Nuevo producto
-            </a>
+{% block content %}
+{% set catalogue = namespace(categories=[]) %}
+{% for product in products %}
+    {% set category_name = product.categoria.nombre if product.categoria else 'Sin categoría' %}
+    {% if category_name not in catalogue.categories %}{% set catalogue.categories = catalogue.categories + [category_name] %}{% endif %}
+{% endfor %}
+<div class="restaurant-page restaurant-menu" data-menu-catalogue>
+    <header class="restaurant-page-header">
+        <div><p class="restaurant-eyebrow"><span class="restaurant-dot" aria-hidden="true"></span> El sabor de {{ app_name }}</p><h1>La carta</h1><p class="restaurant-subtitle">Cada plato tiene su lugar. Encuentra, organiza y prepara lo que tus clientes van a disfrutar.</p></div>
+        <div class="restaurant-header-actions">
+            {% if user_can(current_user, 'reportes.export') %}<a class="button button-ghost" href="{{ url_for('web.exportar_reporte', kind='productos') }}"><i class="fa-solid fa-file-pdf" aria-hidden="true"></i> Reporte PDF</a>{% endif %}
+            {% if user_can(current_user, 'categorias.view') %}<a class="button button-ghost" href="{{ url_for('web.categorias') }}"><i class="fa-solid fa-tags" aria-hidden="true"></i> Categorías</a>{% endif %}
+            {% if user_can(current_user, 'productos.create') %}<a class="button button-primary" href="{{ url_for('web.nuevo_producto') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Añadir producto</a>{% endif %}
         </div>
     </header>
 
-    <article class="panel mb-6">
-        <div class="panel-header border-b bg-gray-50">
-            <div>
-                <h2 class="panel-title font-bold">
-                    <i class="fa-solid fa-magnifying-glass mr-2 text-muted"></i> Catálogo actual
-                </h2>
-                <p class="text-sm text-muted mt-1">Busca por nombre o categoría y administra acciones rápidas.</p>
-            </div>
+    <section class="menu-intro" aria-label="Resumen de la carta">
+        <div class="menu-intro-copy"><span class="restaurant-eyebrow">Una carta con personalidad</span><h2>Todo lo bueno,<br>en un solo menú.</h2><p>Precios claros. Disponibilidad al día.<br>Tu cocina lista para el siguiente pedido.</p></div>
+        <div class="menu-intro-art" aria-hidden="true"><img src="{{ url_for('static', filename='brand/food-plate.svg') }}" alt="" width="320" height="220"></div>
+        <div class="menu-summary"><div><strong>{{ products|length }}</strong><span>{{ 'resultado' if products|length == 1 else 'resultados' }}{{ ' de búsqueda' if search else ' en la carta' }}</span></div><div><strong>{{ products|selectattr('disponible')|list|length }}</strong><span>disponibles en esta vista</span></div><div><strong>{{ catalogue.categories|length }}</strong><span>{{ 'categoría' if catalogue.categories|length == 1 else 'categorías' }}</span></div></div>
+    </section>
 
-            <form class="search-inline" method="get" action="{{ url_for('web.productos') }}">
-                <input type="search" name="q" value="{{ search or '' }}" placeholder="Buscar producto o categoría">
-                <button class="button button-secondary button-small" type="submit">
-                    <i class="fa-solid fa-search mr-1"></i> Buscar
-                </button>
-            </form>
+    <section class="menu-catalogue-section" aria-labelledby="menu-catalogue-title">
+        <div class="menu-tools">
+            <div><p class="restaurant-eyebrow">Elige un antojo</p><h2 id="menu-catalogue-title">Explora nuestros sabores</h2></div>
+            <form class="menu-search" method="get" action="{{ url_for('web.productos') }}" role="search"><label class="sr-only" for="menu-search">Buscar productos o categorías</label><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input id="menu-search" type="search" name="q" value="{{ search or '' }}" placeholder="Buscar producto o categoría" autocomplete="off"><button class="button button-primary button-small" type="submit">Buscar</button></form>
         </div>
-
-        <div class="panel-body">
-            {% if products %}
-                <div class="entity-list">
-                    {% for product in products %}
-                        <article class="entity-card entity-card-compact">
-                            <div class="entity-media entity-media-small">
-                                {% if product.imagen_url %}
-                                    <img src="{{ product.imagen_url }}" alt="{{ product.nombre }}" loading="lazy">
-                                {% else %}
-                                    <div class="product-placeholder">{{ product.nombre[:1]|upper }}</div>
-                                {% endif %}
-                            </div>
-
-                            <div class="entity-main">
-                                <div class="entity-topline">
-                                    <div>
-                                        <strong class="text-sm">{{ product.nombre }}</strong>
-                                        <span class="text-xs text-muted">
-                                            {{ product.categoria.nombre if product.categoria else 'Sin categoría' }}
-                                        </span>
-                                    </div>
-
-                                    <span class="badge {{ 'badge-pagada' if product.disponible else 'badge-cancelada' }}">
-                                        {{ 'Disponible' if product.disponible else 'Agotado' }}
-                                    </span>
-                                </div>
-
-                                <div class="entity-metrics">
-                                    <div>
-                                        <span>Venta</span>
-                                        <strong>{{ product.precio_venta|money }}</strong>
-                                    </div>
-                                    <div>
-                                        <span>Stock</span>
-                                        <strong>{{ product.stock_actual if product.controla_stock else 'No aplica' }}</strong>
-                                    </div>
-                                </div>
-
-                                {% if product.controla_stock and product.stock_actual <= 12 %}
-                                    <div class="product-stock-alert">
-                                        <i class="fa-solid fa-triangle-exclamation"></i>
-                                        <span>Stock critico: quedan {{ product.stock_actual }} unidades.</span>
-                                    </div>
-                                {% endif %}
-                            </div>
-
-                            <div class="entity-actions">
-                                <form method="post" action="{{ url_for('web.alternar_disponibilidad_producto', product_id=product.id) }}">
-                                    <input type="hidden" name="q" value="{{ search or '' }}">
-                                    <button
-                                        class="button {{ 'button-ghost text-danger border-danger' if product.disponible else 'button-success' }} button-small"
-                                        type="submit"
-                                        data-confirm-title="{{ 'Marcar como agotado' if product.disponible else 'Marcar disponible' }}"
-                                        data-confirm-message="{{ 'El producto dejara de aparecer para venta.' if product.disponible else 'El producto volvera a estar disponible para venta.' }}"
-                                    >
-                                        <i class="fa-solid {{ 'fa-circle-xmark' if product.disponible else 'fa-circle-check' }} mr-1"></i>
-                                        {{ 'Agotar' if product.disponible else 'Disponible' }}
-                                    </button>
-                                </form>
-                                <a class="button button-secondary button-small" href="{{ url_for('web.editar_producto', product_id=product.id) }}">
-                                    <i class="fa-solid fa-pen mr-1"></i> Editar
-                                </a>
-                                <form method="post" action="{{ url_for('web.eliminar_producto', product_id=product.id) }}">
-                                    <button class="button button-ghost button-small text-danger border-danger" type="submit" data-confirm-title="Eliminar producto" data-confirm-message="Se intentará eliminar {{ product.nombre }}. Solo se puede si todavía no tiene ventas ni movimientos de inventario.">
-                                        <i class="fa-solid fa-trash"></i>
-                                    </button>
-                                </form>
-                            </div>
-                        </article>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <div class="empty-state">
-                    <i class="fa-solid fa-box-open"></i>
-                    <p class="text-sm font-medium text-muted">No hay productos para este filtro.</p>
-                </div>
-            {% endif %}
+        {% if search %}<div class="menu-search-summary"><span>Resultados para <strong>“{{ search }}”</strong></span><a class="restaurant-text-link" href="{{ url_for('web.productos') }}">Ver toda la carta <i class="fa-solid fa-xmark" aria-hidden="true"></i></a></div>{% endif %}
+        {% if products %}
+        <div class="menu-filter-toolbar" data-menu-controls hidden>
+            <div class="menu-category-tabs" role="group" aria-label="Filtrar por categoría"><button class="menu-category-tab is-active" type="button" data-menu-category-filter="" aria-pressed="true"><i class="fa-solid fa-utensils" aria-hidden="true"></i> Todos <span>{{ products|length }}</span></button>{% for category in catalogue.categories|sort %}<button class="menu-category-tab" type="button" data-menu-category-filter="{{ category }}" aria-pressed="false">{{ category }}</button>{% endfor %}</div>
+            <label class="menu-status-filter"><span class="sr-only">Filtrar por disponibilidad</span><select data-menu-status-filter><option value="">Toda disponibilidad</option><option value="available">Disponibles</option><option value="unavailable">Agotados</option></select></label>
         </div>
-    </article>
-
+        <div class="menu-results-line"><span data-menu-results aria-live="polite" aria-atomic="true">{{ products|length }} producto{{ '' if products|length == 1 else 's' }}</span><span><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Precios en dólares</span></div>
+        <div class="menu-product-grid">
+            {% for product in products %}
+            {% set category_name = product.categoria.nombre if product.categoria else 'Sin categoría' %}
+            {% set food_hint = (category_name ~ ' ' ~ product.nombre)|lower %}
+            {% set food_art = 'food-drink.svg' if ('bebida' in food_hint or 'refresco' in food_hint or 'jugo' in food_hint or 'café' in food_hint or 'cerveza' in food_hint or 'coctel' in food_hint) else ('food-pizza.svg' if 'pizza' in food_hint else ('food-dessert.svg' if ('postre' in food_hint or 'pastel' in food_hint or 'helado' in food_hint) else 'food-plate.svg')) %}
+            <article class="menu-product-card {{ 'menu-product-unavailable' if not product.disponible else '' }}" data-menu-product data-menu-category="{{ category_name }}" data-menu-status="{{ 'available' if product.disponible else 'unavailable' }}">
+                <div class="menu-product-media {{ 'menu-product-illustration' if not product.imagen_url else '' }}">
+                    <img src="{{ product.imagen_url if product.imagen_url else url_for('static', filename='brand/' ~ food_art) }}" alt="{{ product.nombre if product.imagen_url else '' }}" loading="lazy" width="400" height="280" data-menu-product-image data-menu-fallback="{{ url_for('static', filename='brand/' ~ food_art) }}">
+                    <span class="menu-availability {{ 'menu-availability-on' if product.disponible else 'menu-availability-off' }}"><span aria-hidden="true"></span>{{ 'Disponible' if product.disponible else 'Agotado' }}</span>
+                    <span class="menu-illustration-label" {% if product.imagen_url %}hidden{% endif %}>Ilustración · añade tu foto</span>
+                </div>
+                <div class="menu-product-copy">
+                    <p class="menu-product-category">{{ category_name }}</p><h3>{{ product.nombre }}</h3>
+                    <div class="menu-product-price-row"><strong class="menu-product-price">{{ product.precio_venta|money }}</strong><span class="menu-preparation-chip"><i class="fa-solid {{ 'fa-fire-burner' if product.requiere_cocina else 'fa-bell-concierge' }}" aria-hidden="true"></i>{{ 'A cocina' if product.requiere_cocina else 'Servicio directo' }}</span></div>
+                    <div class="menu-product-stock {{ 'menu-stock-low' if product.stock_bajo else '' }}"><i class="fa-solid {{ 'fa-triangle-exclamation' if product.stock_bajo else ('fa-box' if product.controla_stock else 'fa-utensils') }}" aria-hidden="true"></i>{% if product.controla_stock %}<span>{{ product.stock_actual }} unidad{{ '' if product.stock_actual == 1 else 'es' }} en stock{{ ' · por reponer' if product.stock_bajo else '' }}</span>{% else %}<span>{{ 'Preparado por tu cocina' if product.requiere_cocina else 'Sin control de stock' }}</span>{% endif %}</div>
+                </div>
+                {% if user_can(current_user, 'productos.edit') or user_can(current_user, 'productos.availability') or user_can(current_user, 'productos.delete') %}
+                <div class="menu-product-actions">
+                    {% if user_can(current_user, 'productos.edit') %}<a class="button button-secondary button-small menu-edit-button" href="{{ url_for('web.editar_producto', product_id=product.id) }}"><i class="fa-solid fa-pen" aria-hidden="true"></i> Editar</a>{% endif %}
+                    {% if user_can(current_user, 'productos.availability') %}<form method="post" action="{{ url_for('web.alternar_disponibilidad_producto', product_id=product.id) }}"><input type="hidden" name="q" value="{{ search or '' }}"><button class="button button-ghost button-small menu-availability-button" type="submit" data-confirm-title="{{ 'Marcar como agotado' if product.disponible else 'Marcar disponible' }}" data-confirm-message="{{ 'El producto dejará de estar disponible para venta.' if product.disponible else 'El producto volverá a estar disponible para venta.' }}"><i class="fa-solid {{ 'fa-circle-pause' if product.disponible else 'fa-circle-check' }}" aria-hidden="true"></i>{{ 'Agotar' if product.disponible else 'Activar' }}</button></form>{% endif %}
+                    {% if user_can(current_user, 'productos.delete') %}<form class="menu-delete-form" method="post" action="{{ url_for('web.eliminar_producto', product_id=product.id) }}"><button class="button button-ghost button-small menu-delete-button" type="submit" aria-label="Eliminar {{ product.nombre }}" title="Eliminar producto" data-confirm-title="Eliminar producto" data-confirm-message="Se intentará eliminar {{ product.nombre }}. Solo se puede si todavía no tiene ventas ni movimientos de inventario."><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button></form>{% endif %}
+                </div>
+                {% endif %}
+            </article>
+            {% endfor %}
+        </div>
+        <div class="restaurant-empty-state menu-filter-empty" data-menu-empty hidden><span class="restaurant-empty-icon"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></span><h3>No hay productos con esos filtros</h3><p>Prueba otra categoría o cambia la disponibilidad.</p><button class="button button-secondary" type="button" data-menu-reset>Mostrar todos</button></div>
+        {% else %}
+        <div class="restaurant-empty-state menu-initial-empty"><img src="{{ url_for('static', filename='brand/food-plate.svg') }}" alt="" width="220" height="150"><h3>{{ 'No encontramos ese sabor' if search else 'Tu próxima gran carta empieza aquí' }}</h3><p>{{ 'Prueba con otro nombre o vuelve a explorar todos los productos.' if search else 'Añade tus platos, bebidas y postres, con sus precios y una foto para darles vida.' }}</p><div class="restaurant-empty-actions">{% if search %}<a class="button button-secondary" href="{{ url_for('web.productos') }}">Ver toda la carta</a>{% endif %}{% if user_can(current_user, 'productos.create') %}<a class="button button-primary" href="{{ url_for('web.nuevo_producto') }}"><i class="fa-solid fa-plus" aria-hidden="true"></i> Añadir producto</a>{% endif %}</div></div>
+        {% endif %}
+    </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='menu.js', v='restaurant-2026-1') }}" defer></script>
 {% endblock %}

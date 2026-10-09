@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="280" viewBox="0 0 400 280" fill="none">
+  <defs>
+    <filter id="shadow" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="11" stdDeviation="9" flood-color="#62432e" flood-opacity=".14"/></filter>
+    <linearGradient id="steak" x1="150" y1="130" x2="260" y2="220" gradientUnits="userSpaceOnUse"><stop stop-color="#be5d36"/><stop offset="1" stop-color="#7e3828"/></linearGradient>
+  </defs>
+  <ellipse cx="200" cy="232" rx="123" ry="15" fill="#7e503b" opacity=".08"/>
+  <g filter="url(#shadow)">
+    <ellipse cx="198" cy="142" rx="139" ry="110" fill="#fffdf4"/>
+    <ellipse cx="198" cy="142" rx="119" ry="91" fill="#f3ebd8" stroke="#ddd2b6" stroke-width="2"/>
+    <ellipse cx="198" cy="142" rx="111" ry="83" fill="#fbf7eb"/>
+    <path d="M129 136c-12-17-8-42 8-54 9-18 38-20 52-8 17-2 38 17 33 34-8 18-43 25-58 34-16 8-26 6-35-6Z" fill="#518050"/>
+    <path d="M140 104c8-14 23-21 38-15-1 16-14 28-29 29M177 119c-5-14 8-28 23-30 8 12 1 30-11 37M129 111c-12 7-12 26 3 32 16-2 25-14 20-29" fill="#789953"/>
+    <path d="M141 136c13 0 18-7 23-13M168 114l5-20M186 117l13-19" stroke="#e0dd9c" stroke-width="2" stroke-linecap="round"/>
+    <ellipse cx="134" cy="93" rx="14" ry="13" fill="#c95334"/>
+    <ellipse cx="134" cy="93" rx="10" ry="9" fill="#e77a42"/><path d="m126 90 15 6m-13 3 10-12" stroke="#f6b985" stroke-width="2"/>
+    <ellipse cx="204" cy="78" rx="12" ry="11" fill="#bf4e32"/><ellipse cx="204" cy="78" rx="8" ry="7" fill="#e67c43"/>
+    <g fill="#e8b452" stroke="#cc9138" stroke-width="2">
+      <path d="M253 83c12-6 23 4 19 18l-15 33c-6 10-18 8-20-4l5-32c1-7 4-11 11-15Z"/>
+      <path d="M279 100c12-3 20 8 12 21l-18 22c-9 7-20 1-15-10l10-21c3-6 5-10 11-12Z"/>
+      <path d="M293 130c11 2 14 13 4 21l-25 15c-10 6-19-5-11-14l21-18c4-4 6-5 11-4Z"/>
+    </g>
+    <path d="M139 166c-3-20 12-36 37-33l59 7c26 3 40 20 28 43l-14 22c-9 11-33 12-60 0l-33-17c-9-4-15-10-17-22Z" fill="#673b2a"/>
+    <path d="M144 159c-2-17 11-28 31-26l57 7c27 3 39 18 27 39l-12 20c-10 10-31 9-54-1l-32-17c-10-4-16-10-17-22Z" fill="url(#steak)" stroke="#d27a48" stroke-width="3"/>
+    <path d="m165 141 72 45m-88-30 78 45m-39-64 62 39m-48-36 53 29" stroke="#673b2a" stroke-width="5" stroke-linecap="round" opacity=".7"/>
+    <path d="m185 166 32-13m-22 24 35-13" stroke="#ecc98e" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+    <path d="m180 209 25-19m-12 5-8-8m16 5 2-11m-7 14 7 5" stroke="#567343" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M190 190c-11 0-13-9-5-9s10 4 9 7M202 189c0-11 9-15 9-5s-5 9-8 9M196 197c10-3 17 3 8 7-6 3-9-1-9-4" fill="#75924e"/>
+  </g>
+  <path d="m44 114-3 88m-9-95-1 29c0 11 18 12 19 1l2-27m-12-2-1 27" stroke="#b8b59f" stroke-width="5" stroke-linecap="round"/>
+  <path d="m356 106-1 88c0 10 9 11 10 1l1-89c-2-20-10-14-10 0Z" fill="#d5d0b9"/>
+  <circle cx="86" cy="216" r="3" fill="#bc6a42" opacity=".5"/><circle cx="314" cy="84" r="2" fill="#8c9a57"/>
+</svg>
