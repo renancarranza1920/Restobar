@@ -21,7 +21,7 @@
             <h2 id="service-hero-title">Sabor en la mesa.<br>Orden en cada detalle.</h2>
             <p>{{ business_tagline or 'De la primera comanda al último cobro, todo tu equipo en la misma sintonía.' }}</p>
             <div class="service-hero-actions">
-                {% if user_can(current_user, 'ordenes.create') and user_can(current_user, 'ordenes.view') %}<a class="button service-hero-primary" href="{{ url_for('web.ordenes') }}#new-order-form"><i class="fa-solid fa-plus" aria-hidden="true"></i> Nueva orden</a>
+                {% if user_can(current_user, 'caja.charge') %}<a class="button service-hero-primary" href="{{ url_for('counter.sale') }}"><i class="fa-solid fa-cash-register" aria-hidden="true"></i> Vender y cobrar</a>
                 {% elif user_can(current_user, 'cocina.view') %}<a class="button service-hero-primary" href="{{ url_for('web.cocina') }}"><i class="fa-solid fa-fire-burner" aria-hidden="true"></i> Abrir cocina</a>{% endif %}
                 {% if user_can(current_user, 'productos.view') %}<a class="button service-hero-secondary" href="{{ url_for('web.productos') }}">Explorar la carta <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a>{% endif %}
             </div>

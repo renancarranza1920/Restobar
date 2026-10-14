@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='counter.css') }}">{% endblock %}
+{% block content %}
+<div class="counter-page">
+    <header class="counter-heading"><div><p class="restaurant-eyebrow">COSTO Y EXISTENCIAS</p><h1>Recetas e insumos</h1><p>Una porción, sus ingredientes y el descuento automático al cobrar.</p></div><a class="button button-ghost" href="{{ url_for('web.inventario') }}">Bodega y movimientos <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></header>
+    <div class="recipe-layout">
+        <section><h2 class="counter-section-title">Recetas de la carta</h2><p class="counter-hint">Usa gramos (g), mililitros (ml) o unidades enteras. Ejemplo: 125 g de carne por hamburguesa. Las bebidas envasadas pueden venderse por unidad sin receta.</p>
+            {% set view = namespace(opened=false) %}{% for product in products %}<details class="recipe-card" {% if recipes[product.id] and not view.opened %}open{% set view.opened = true %}{% endif %}><summary><div><strong>{{ product.nombre }}</strong><small>{{ product.precio_venta|money }} · {{ 'Cocina' if product.requiere_cocina else 'Entrega directa' }}</small></div><span>{{ (recipes[product.id]|length ~ ' insumos') if recipes[product.id] else ('Por unidades' if product.controla_stock else 'Sin receta') }}</span></summary>
+                <form method="post" action="{{ url_for('counter.save_recipe', product_id=product.id) }}" class="recipe-form" data-recipe-form>
+                    <input type="hidden" name="csrf" value="{{ csrf }}">
+                    <p class="counter-hint">Cantidad para <strong>una porción</strong>. La receta sustituye el descuento de unidades del producto final.</p>
+                    <div data-recipe-rows>{% for row in recipes[product.id] %}<div class="recipe-row"><label class="sr-only">Insumo<select name="ingredient_id" required>{% for ingredient in ingredients %}<option value="{{ ingredient.id }}" {% if ingredient.id == row.insumo_id %}selected{% endif %}>{{ ingredient.nombre }} ({{ unit_for(ingredient) }})</option>{% endfor %}</select></label><label class="sr-only">Cantidad<input name="quantity" type="number" min="1" step="1" value="{{ row.cantidad }}" required aria-label="Cantidad en unidad base"></label><button type="button" class="button button-ghost" data-remove-ingredient aria-label="Quitar ingrediente">×</button></div>{% endfor %}</div>
+                    {% if user_can(current_user, 'inventario.create') %}<div class="recipe-actions"><button type="button" class="button button-ghost" data-add-ingredient {% if not ingredients %}disabled{% endif %}>+ Añadir insumo</button><button class="button button-primary" type="submit">Guardar receta</button></div>{% endif %}
+                </form>
+            </details>{% else %}<p class="counter-empty">Añade productos a la carta para configurar sus recetas.</p>{% endfor %}
+        </section>
+        <aside><section class="counter-cart recipe-stock"><h2>Existencias disponibles</h2>{% for ingredient in ingredients + unit_products %}<div class="recipe-stock-row"><strong>{{ ingredient.nombre }}</strong><span>{{ ingredient.stock_actual }} {{ unit_for(ingredient) }}</span></div>{% else %}<p class="counter-empty">Registra tu primera compra de insumos.</p>{% endfor %}</section>
+            {% if user_can(current_user, 'inventario.create') %}
+            <section class="counter-cart recipe-receive"><h2>Compra o merma</h2><form action="{{ url_for('counter.receive_ingredient') }}" method="post" class="form-stack" data-ingredient-form>
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <label>Insumo o producto por unidad<select name="ingredient_id" data-ingredient-choice><option value="">Crear insumo nuevo</option><optgroup label="Insumos de recetas">{% for ingredient in ingredients %}<option value="{{ ingredient.id }}">{{ ingredient.nombre }} ({{ unit_for(ingredient) }})</option>{% endfor %}</optgroup><optgroup label="Unidades listas para vender">{% for product in unit_products %}<option value="{{ product.id }}">{{ product.nombre }} (unidad de venta)</option>{% endfor %}</optgroup></select></label>
+                <div data-new-ingredient><label>Nombre<input name="name" maxlength="100" placeholder="Ej. Carne para hamburguesa"></label><label>Unidad base<select name="unit"><option value="unidad">Unidades</option><option value="g">Gramos (g)</option><option value="ml">Mililitros (ml)</option></select></label></div>
+                <label>Movimiento<select name="kind" data-ingredient-kind><option value="compra">Compra / entrada</option><option value="merma">Merma / pérdida</option></select></label>
+                <label>Cantidad en unidad base<input name="quantity" type="number" min="1" step="1" required placeholder="Ej. 1000 g = 1 kg"></label>
+                <label data-cost-field>Costo total de la compra ($)<input name="cost" type="number" min="0" step="0.01" value="0" required></label>
+                <label>Nota o motivo<input name="notes" maxlength="180" placeholder="Obligatorio si registras una merma"></label>
+                <button class="button button-primary" type="submit">Registrar movimiento</button>
+                <p class="counter-hint">Repón las bebidas envasadas directamente por unidades. La unidad base de los insumos se conserva. Las compras por paquetes siguen disponibles en Bodega.</p>
+            </form></section>{% endif %}
+        </aside>
+    </div>
+    <template id="recipe-row-template"><div class="recipe-row"><select name="ingredient_id" aria-label="Insumo" required><option value="">Seleccionar insumo</option>{% for ingredient in ingredients %}<option value="{{ ingredient.id }}">{{ ingredient.nombre }} ({{ unit_for(ingredient) }})</option>{% endfor %}</select><input name="quantity" type="number" min="1" step="1" placeholder="Cantidad" aria-label="Cantidad en unidad base" required><button type="button" class="button button-ghost" data-remove-ingredient aria-label="Quitar ingrediente">×</button></div></template>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='recipes.js') }}" defer></script>{% endblock %}

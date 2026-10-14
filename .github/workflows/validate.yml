@@ -1,0 +1,36 @@
+name: Validate restaurant operations
+on:
+  push:
+    branches: [rework/restobar-fast-service]
+  pull_request:
+    branches: [main, rework/restobar-restaurante-dte]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      DTE_TRANSMISSION_ENABLED: "0"
+      DTE_ENVIRONMENT: "00"
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: disposable-test-password
+          MYSQL_ROOT_HOST: "%"
+          MYSQL_DATABASE: restobar_test
+        ports: [3306:3306]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pdisposable-test-password --silent"
+          --health-interval=10s --health-timeout=5s --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r requirements.txt 'PyMySQL[rsa]==1.1.2'
+      - run: python -m pip check
+      - run: python -m unittest discover -s tests -v
+      - run: python tests/mysql_runner.py
+        env:
+          RESTOBAR_MYSQL_TEST_URL: mysql+pymysql://root:disposable-test-password@127.0.0.1/restobar_test

@@ -1,8 +1,12 @@
 # Restobar
 
-Sistema de operación para restaurantes: mesas, comandas, cocina, caja, inventario y preparación de facturas electrónicas de El Salvador.
+Operación para comida rápida y bebidas: **venta y cobro en una pantalla**, comanda automática a cocina, inventario por recetas y unidades, y caja por turno. Incluye reposición directa de bebidas, control de ingredientes por porción, cambio de efectivo, prevención de cobros duplicados y cortes con diferencia de caja.
 
-La nueva interfaz usa crema, terracota y verde profundo; organiza el trabajo por áreas y mantiene los flujos existentes. Incluye carta visual, accesos rápidos, búsqueda de secciones con `Ctrl/Cmd + K`, modo oscuro, navegación móvil y notificaciones. En **Preferencias** puedes cambiar nombre, logo, paleta, movimiento y formatos de fecha y hora. Los roles de servicio, cocina y caja tienen permisos separados; los roles ya configurados se conservan al reiniciar.
+Se continúa desde `56a6453`. El esquema nuevo es aditivo: conserva órdenes, pagos, usuarios, roles y evidencia fiscal anteriores. La transmisión a Hacienda permanece desactivada. Las pantallas de servicio de mesa y los flujos fiscales existentes siguen disponibles.
+
+- [Cómo operar y capturas de la versión nueva](docs/VENTA_RAPIDA.md)
+- [Actualización preparada de restobar-preview en Oracle](docs/ORACLE_PREVIEW.md)
+- [Alcance fiscal y requisitos pendientes](docs/FACTURACION_ELECTRONICA.md)
 
 ## Desarrollo local
 
@@ -27,7 +31,7 @@ Arranque con Gunicorn:
 gunicorn --no-control-socket --workers 1 --bind 127.0.0.1:5000 run:app
 ```
 
-Un worker evita carreras entre los pasos de inicialización de esquema al arrancar. Aumenta los workers solo después de separar y verificar esa inicialización. El despliegue existente de Oracle se adaptará cuando se confirmen su Compose, proxy y rutas; no se añaden aquí comandos que supongan su configuración.
+Un worker evita carreras entre los pasos de inicialización de esquema al arrancar. Aumenta los workers solo después de separar y verificar esa inicialización. La actualización de Oracle usa el Compose actual de `restobar-preview`, conserva sus volúmenes y verifica los datos antes de arrancar la versión nueva. Consulta [la preparación y el respaldo](docs/ORACLE_PREVIEW.md).
 
 ## Facturación electrónica
 
@@ -46,9 +50,9 @@ python -m pip check
 python -m unittest discover -s tests -v
 ```
 
-Las pruebas usan bases SQLite temporales. Verifican el flujo de restaurante, permisos, personalización, cálculo de IVA, catálogos y preparación fiscal. El transporte simulado verifica aceptación, rechazos, resultados inciertos y prevención de envíos duplicados. La compatibilidad operativa con MySQL, el firmador y los servicios reales de Hacienda requieren pruebas separadas.
+Las pruebas principales usan bases SQLite temporales. `tests/mysql_runner.py` repite los casos de mostrador en una base MySQL 8.4 desechable llamada `restobar_test` en localhost; nunca se debe apuntar ese runner a datos reales. Verifican el flujo de restaurante, permisos, personalización, cálculo de IVA, catálogos y preparación fiscal. El transporte simulado verifica aceptación, rechazos, resultados inciertos y prevención de envíos duplicados. La compatibilidad operativa con MySQL, el firmador y los servicios reales de Hacienda requieren pruebas separadas.
 
-## Capturas de la nueva interfaz
+## Capturas anteriores (versión 56a6453)
 
 Las capturas usan datos locales de demostración, sin información del restaurante ni credenciales reales.
 

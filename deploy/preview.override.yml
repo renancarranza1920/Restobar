@@ -1,0 +1,11 @@
+# Applied on top of the existing Oracle Compose; keeps its DB, secrets,
+# volumes, ports and network. Only app is rebuilt, with an immutable image tag.
+services:
+  app:
+    image: restobar-preview-app:fast-service-${RESTOBAR_RELEASE:?Set RESTOBAR_RELEASE to the verified commit}
+    build:
+      context: /home/ubuntu/proyectos/restobar-preview
+      dockerfile: deploy/Dockerfile
+    environment:
+      DTE_TRANSMISSION_ENABLED: "0"
+      DTE_ENVIRONMENT: "00"
