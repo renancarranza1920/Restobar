@@ -50,3 +50,9 @@ Las nueve [capturas](VENTA_RAPIDA.md#capturas) utilizan exclusivamente datos sin
 - El paquete registra imagen y commit anteriores, realiza respaldo, comprueba conservación y recupera app si falla una comprobación.
 
 No hubo transmisiones reales a Hacienda ni cambios al servidor Oracle. El build local corresponde a la arquitectura del entorno de validación; la construcción nativa ARM64 se hará al ejecutar la preparación en Oracle.
+
+## GitHub Actions
+
+La rama se publicó y se abrió el PR #27. Las ejecuciones de GitHub Actions no llegaron a iniciar un runner ni a ejecutar pasos: GitHub informa **“The job was not started because your account is locked due to a billing issue.”**
+
+Este bloqueo corresponde a la facturación de la cuenta GitHub. Los resultados de 104 pruebas SQLite, 15 escenarios MySQL y navegador indicados arriba se obtuvieron en el entorno local de validación. El workflow queda configurado para ejecutar las mismas comprobaciones cuando GitHub permita iniciar runners.
