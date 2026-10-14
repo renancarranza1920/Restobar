@@ -1,0 +1,13 @@
+.git
+.venv
+venv
+.env
+.env.*
+instance
+work
+docs
+tests
+attachments
+**/__pycache__
+**/*.pyc
+app/static/uploads

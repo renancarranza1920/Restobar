@@ -87,6 +87,7 @@ button, a, input, select, textarea, summary { -webkit-tap-highlight-color: trans
 :focus-visible { outline: 3px solid var(--app-primary); outline-offset: 4px; }
 .skip-link { position: fixed; top: -80px; left: 1rem; z-index: 300; padding: .8rem 1rem; border-radius: 10px; color: #fff; background: #214d3b; }
 .skip-link:focus { top: 1rem; }
+.skip-link:not(:focus) { clip-path: inset(50%); width: 1px; height: 1px; padding: 0; overflow: hidden; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; padding: 0; margin: -1px; border: 0; }
 /* Local, stroke-based SVG icons replace remote icon fonts. */
 i.fa-solid, i.fa-regular { display: inline-flex; align-items: center; justify-content: center; width: 1.12em; height: 1.12em; flex: 0 0 auto; font-style: normal; vertical-align: -.13em; }

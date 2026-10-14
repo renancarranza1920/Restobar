@@ -317,7 +317,8 @@ class RestaurantRegressionTests(unittest.TestCase):
         table_id, product_id = self.create_dining_fixture()
         self.post("/caja/abrir", {"opening_amount": "NaN"})
         with self.app.app_context():
-            self.assertEqual(SesionCaja.query.one().monto_apertura, Decimal("0.00"))
+            self.assertEqual(SesionCaja.query.count(), 0)
+        self.post("/caja/abrir", {"opening_amount": "0.00"})
         order_id = self.create_order(table_id)
         item_id = self.add_pizza(order_id, product_id, quantity=1)
         self.post(f"/items/{item_id}/preparar", {})

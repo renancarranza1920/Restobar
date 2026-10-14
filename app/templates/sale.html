@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='counter.css') }}">{% endblock %}
+{% block content %}
+<div class="counter-page" data-counter data-csrf="{{ csrf }}" data-key="{{ sale_key }}" data-shift="{{ session_open.id if session_open else '' }}" data-checkout="{{ url_for('counter.checkout') }}" data-status-url="{{ url_for('counter.live_status') }}">
+    <header class="counter-heading"><div><p class="restaurant-eyebrow">MOSTRADOR · COMIDA Y BEBIDAS</p><h1>Venta y cobro</h1><p>Arma el pedido. Cobra. Cocina lo recibe automáticamente.</p></div><a class="button button-ghost" href="{{ url_for('web.caja') }}">{{ 'Turno #' ~ session_open.id if session_open else 'Abrir turno de caja' }} <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></a></header>
+    {% if not session_open %}<div class="counter-warning" role="status">La caja está cerrada. <a href="{{ url_for('web.caja') }}">Abre un turno</a> para comenzar a vender.</div>{% endif %}
+    <div class="counter-layout">
+        <section class="counter-menu" aria-label="Productos para vender">
+            <div class="counter-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><label class="sr-only" for="counter-search">Buscar comida o bebida</label><input id="counter-search" type="search" placeholder="Buscar comida o bebida…" autocomplete="off" data-product-search></div>
+            <div class="counter-filters" aria-label="Categorías"><button type="button" class="is-selected" data-category="">Todo</button>{% for category in products|map(attribute='category')|unique %}<button type="button" data-category="{{ category }}">{{ category }}</button>{% endfor %}</div>
+            <div class="counter-products">
+                {% for product in products %}
+                <button class="counter-product" type="button" data-product-id="{{ product.id }}" data-name="{{ product.name }}" data-price="{{ product.price }}" data-category-name="{{ product.category }}" data-available="{{ product.available if product.available is not none else '' }}" {% if product.available == 0 %}disabled{% endif %}>
+                    <div class="counter-product-art"><img src="{{ product.image or url_for('static', filename='brand/food-plate.svg' if product.kitchen else 'brand/food-drink.svg') }}" alt="" loading="lazy"><span class="counter-product-kind">{{ 'Cocina' if product.kitchen else 'Entrega directa' }}</span></div>
+                    <div class="counter-product-copy"><strong>{{ product.name }}</strong><span>{{ product.category }}</span><div><b>{{ product.price|money }}</b><span class="counter-add" aria-hidden="true">+</span></div><small data-product-stock>{{ (product.available ~ ' disponibles') if product.available is not none else ('Configura su receta' if product.kitchen and not product.recipe else 'Sin control de stock') }}</small></div>
+                </button>
+                {% else %}<div class="counter-empty">Tu carta está vacía. {% if user_can(current_user, 'productos.create') %}<a href="{{ url_for('web.nuevo_producto') }}">Añade el primer producto.</a>{% endif %}</div>{% endfor %}
+            </div><p class="counter-empty" data-search-empty hidden>No hay productos que coincidan con la búsqueda.</p>
+            <section class="counter-pickup"><header><h2>Pedidos de mostrador</h2><span>Se actualizan solos</span></header><div data-recent-sales>{% include 'partials/counter_orders.html' %}</div></section>
+        </section>
+        <aside id="counter-payment" class="counter-cart" aria-label="Pedido y cobro">
+            <header><div><p class="restaurant-eyebrow">PEDIDO ACTUAL</p><h2>¿Qué va a llevar?</h2></div><button type="button" class="button button-ghost button-small" data-clear-cart>Vaciar</button></header>
+            <fieldset data-cart-fields class="counter-fields">
+                <div class="counter-toggle"><label><input type="radio" name="channel" value="llevar" checked> Para llevar</label><label><input type="radio" name="channel" value="local"> Comer aquí</label></div>
+                <label class="counter-label" for="counter-customer">Nombre o referencia <span>opcional</span></label><input id="counter-customer" maxlength="100" placeholder="Ej. Ana · mesa 3" data-customer>
+                <div class="counter-cart-lines" data-cart-lines><div class="counter-empty">Toca un producto para empezar.</div></div>
+                <div class="counter-total"><span>Total a cobrar</span><strong data-total>$0.00</strong></div>
+                <p class="counter-tax">Precios finales. Sin propina obligatoria.</p>
+                <div class="counter-toggle"><label><input type="radio" name="method" value="efectivo" checked> Efectivo</label><label><input type="radio" name="method" value="tarjeta"> Tarjeta</label></div>
+                <div data-cash-fields><label class="counter-label" for="counter-received">Efectivo recibido</label><div class="counter-received"><input id="counter-received" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" data-received><button type="button" data-exact>Exacto</button></div><div class="counter-change"><span>Cambio</span><strong data-change>$0.00</strong></div></div>
+            </fieldset>
+            <p data-sale-error class="counter-error" role="alert" hidden></p>
+            <button type="button" class="button button-primary counter-checkout" data-checkout-button disabled>Cobrar pedido</button>
+            <p class="counter-hint">Al cobrar se guarda la venta, se descuenta inventario y se envía la comanda.</p>
+            <section class="counter-success" data-sale-success role="status" hidden><h3 data-success-title></h3><p data-success-copy></p><div><a class="button button-secondary button-small" target="_blank" rel="noopener" data-ticket>Ver ticket</a><a class="button button-ghost button-small" data-billing hidden>Preparar DTE</a></div></section>
+        </aside>
+    </div>
+    <button class="counter-mobile-cart" type="button" data-open-cart hidden>Ver pedido y cobro</button>
+</div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='counter.js') }}" defer></script>{% endblock %}

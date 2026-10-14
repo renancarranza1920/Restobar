@@ -812,7 +812,20 @@ def user_can(user, feature):
 
 
 def navigation_for_user(user):
-    return [item for item in NAV_ITEMS if user_can(user, item["feature"])]
+    items = [dict(item) for item in NAV_ITEMS if user_can(user, item["feature"])]
+    for item in items:
+        if item["feature"] == "ordenes":
+            item["label"] = "Pedidos e historial"
+        elif item["feature"] == "caja":
+            item["label"] = "Caja por turno"
+    if user_can(user, "caja.charge"):
+        items.insert(0, {"label": "Vender", "icon": "fa-cash-register",
+            "endpoint": "counter.sale", "active_endpoints": {"counter.sale"}, "group": "Mostrador"})
+    if user_can(user, "inventario.view"):
+        index = next((i for i, item in enumerate(items) if item.get("feature") == "inventario"), len(items))
+        items.insert(index, {"label": "Recetas e insumos", "icon": "fa-utensils",
+            "endpoint": "counter.recipes", "active_endpoints": {"counter.recipes"}, "group": "Carta e inventario"})
+    return items
 
 
 def default_endpoint_for_user(user):
@@ -1387,48 +1400,16 @@ def available_stock_units(product):
 
 
 def stock_request_errors(selected_lines):
-    requested_by_product = {}
-    products_by_id = {}
-
-    for line in selected_lines:
-        product = line["product"]
-        if not product.controla_stock:
-            continue
-        requested_by_product[product.id] = (
-            requested_by_product.get(product.id, 0) + line["quantity"]
-        )
-        products_by_id[product.id] = product
-
-    errors = []
-    for product_id, requested in requested_by_product.items():
-        product = products_by_id[product_id]
-        available = available_stock_units(product)
-        if available is not None and requested > available:
-            errors.append(
-                f"No puedes agregar {requested} de {product.nombre}. Solo quedan {available} disponibles en stock."
-            )
-    return errors
+    from .fast_inventory import demand_errors
+    return demand_errors(selected_lines)
 
 
 def order_stock_errors(order):
-    totals = {}
-    products = {}
-
-    for item in order.items_activos:
-        if item.pagado or not item.producto or not item.producto.controla_stock:
-            continue
-        totals[item.producto_id] = totals.get(item.producto_id, 0) + item.cantidad
-        products[item.producto_id] = item.producto
-
-    errors = []
-    for product_id, quantity in totals.items():
-        product = products[product_id]
-        stock = int(product.stock_actual or 0)
-        if quantity > stock:
-            errors.append(
-                f"No puedes cobrar la orden: {product.nombre} tiene {stock} en stock y la orden usa {quantity}."
-            )
-    return errors
+    from .fast_inventory import demand_errors
+    return demand_errors([
+        {"product": item.producto, "quantity": item.cantidad}
+        for item in order.items_activos if not item.pagado and item.producto
+    ], exclude_order=order.id)
 
 
 def get_orders_for_listing(status=None, date_value=None):
@@ -1796,7 +1777,7 @@ def get_pending_kitchen_items(limit=None):
         .join(Producto.categoria)
         .join(OrdenItem.orden)
         .filter(Categoria.envia_a_cocina.is_(True))
-        .filter(Orden.estado == "abierta")
+        .filter(Orden.estado != "cancelada")
         .filter(OrdenItem.estado == "pendiente")
         .order_by(OrdenItem.created_at.asc())
     )
@@ -1860,7 +1841,8 @@ def inventory_movement_unit_cost(movement):
     units = int(movement.cantidad_unidades or 0)
     if units <= 0:
         return ZERO
-    return money(as_decimal(movement.precio_unitario) / Decimal(units))
+    # A gram/ml can cost less than a cent; round after consuming the portion.
+    return as_decimal(movement.precio_unitario) / Decimal(units)
 
 
 def inventory_fifo_layers(product):
@@ -2168,6 +2150,8 @@ def reset_divisiones_if_possible(order):
 
 
 def normalize_item_delivery_states(order):
+    if order.venta_rapida:
+        return False
     changed = False
     for item in order.items_activos:
         if item.estado == "listo" or (
@@ -2179,6 +2163,8 @@ def normalize_item_delivery_states(order):
 
 
 def settle_order(order):
+    if order.venta_rapida:
+        return  # Counter payment and kitchen fulfilment are independent.
     sync_order(order)
 
     if order.total > ZERO and order.total_pagado >= order.total and order.todos_entregados:
@@ -2203,24 +2189,10 @@ def order_should_auto_close_zero_balance(order):
 
 
 def mark_order_items_paid(order):
+    from .fast_inventory import consume_item
+    db.session.flush()
     for item in order.items:
-        if item.estado == "cancelado" or item.pagado:
-            continue
-
-        item.pagado = True
-
-        if item.producto and item.producto.controla_stock:
-            item.producto.stock_actual -= item.cantidad
-            movimiento = MovimientoInventario(
-                producto_id=item.producto_id,
-                tipo="venta",
-                cantidad_paquetes=None,
-                cantidad_unidades=item.cantidad,
-                precio_unitario=item.costo_unitario or item.producto.precio_costo,
-                notas=f"Venta de orden #{order.id}",
-                usuario_id=order.usuario_id,
-            )
-            db.session.add(movimiento)
+        consume_item(item)
 
 
 def initial_item_status(producto):
@@ -2357,6 +2329,8 @@ def order_can_receive_payment(user, order):
         return False, "No tienes permiso de caja para cobrar órdenes."
     if order.estado != "abierta":
         return False, "La orden ya no está abierta para cobro."
+    if not order.sesion_caja or order.sesion_caja.estado != "abierta":
+        return False, "La orden pertenece a un turno cerrado. Revisa la cuenta con el gerente."
     if not order.items_activos:
         return False, "La orden no tiene items activos."
     if not order.todos_entregados:

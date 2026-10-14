@@ -1,0 +1,5 @@
+{% for sale in recent %}
+{% set status = namespace(pending=false, ready=false) %}
+{% for item in sale.orden.items_activos %}{% if item.estado == 'pendiente' %}{% set status.pending = true %}{% elif item.estado == 'listo' %}{% set status.ready = true %}{% endif %}{% endfor %}
+<article class="counter-pickup-row"><div><strong>#{{ sale.orden_id }} · {{ sale.orden.nombre_cliente }}</strong><small>{{ sale.orden.mesa_etiqueta }} · {{ sale.orden.total|money }}</small></div><span class="counter-state {{ 'is-ready' if status.ready and not status.pending else '' }}">{{ 'En cocina' if status.pending else ('Listo para retirar' if status.ready else 'Entregado') }}</span>{% if status.ready and not status.pending %}<form method="post" action="{{ url_for('counter.handover', order_id=sale.orden_id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="button button-primary button-small" type="submit">Entregar</button></form>{% endif %}</article>
+{% else %}<p class="counter-empty">Los pedidos aparecerán aquí al cobrar.</p>{% endfor %}

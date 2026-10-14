@@ -35,11 +35,17 @@ def create_app():
     app.config["PRODUCT_UPLOAD_DIR"].mkdir(parents=True, exist_ok=True)
     app.config["BRANDING_UPLOAD_DIR"].mkdir(parents=True, exist_ok=True)
 
+    if app.config["SQLALCHEMY_DATABASE_URI"].startswith("mysql"):
+        # The lock serializes checkout; READ COMMITTED ensures reads after the
+        # lock see the last checkout even if authentication already read users.
+        app.config.setdefault("SQLALCHEMY_ENGINE_OPTIONS", {})["isolation_level"] = "READ COMMITTED"
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
 
     from . import models
+    from . import fast_models
+    from .fast_service import counter_bp
     from .routes import api_bp, web_bp
     from .billing import billing_bp
     from .fiscal import fiscal_bp
@@ -48,9 +54,13 @@ def create_app():
     app.register_blueprint(api_bp)
     app.register_blueprint(billing_bp)
     app.register_blueprint(fiscal_bp)
+    app.register_blueprint(counter_bp)
 
     with app.app_context():
         db.create_all()
+        if db.session.get(fast_models.GuardiaOperacion, "caja") is None:
+            db.session.add(fast_models.GuardiaOperacion(clave="caja", revision=0))
+            db.session.commit()
         
         bootstrap_security_schema()
         bootstrap_system_preferences()

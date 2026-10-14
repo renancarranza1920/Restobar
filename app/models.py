@@ -554,6 +554,8 @@ class Orden(db.Model):
 
     @property
     def mesa_etiqueta(self):
+        if self.venta_rapida:
+            return "Para llevar" if self.venta_rapida.canal == "llevar" else "Comer aquí"
         mesas = self.mesas_operativas
         if not mesas:
             return "Sin mesa"

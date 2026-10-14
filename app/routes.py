@@ -287,6 +287,16 @@ def audit_payment_details(order, amount, method, received, change, label=None, l
 
 
 def ticket_payment_context(order, total=None, division_id=None):
+    if order.venta_rapida and division_id is None:
+        sale = order.venta_rapida
+        return {
+            "method": order.pagos[-1].metodo,
+            "amount": order.total,
+            "tip": Decimal("0.00"),
+            "total_charged": order.total,
+            "received": sale.recibido,
+            "change": sale.cambio,
+        }
     ticket_payments = session.get("ticket_payments", {})
     stored = ticket_payments.get(ticket_payment_key(order.id, division_id), {})
     latest_payment = order.pagos[-1] if order.pagos else None
@@ -511,11 +521,11 @@ def extract_product_payload(existing=None):
     errors = []
 
     if category and category.envia_a_cocina:
-        cost_price = 0
-        purchase_unit = "unidad"
-        units_per_package = 1
+        cost_price = existing.precio_costo if existing else 0
+        purchase_unit = existing.unidad_compra if existing else "unidad"
+        units_per_package = existing.unidades_por_paquete if existing else 1
         manages_stock = False
-        current_stock = 0
+        current_stock = existing.stock_actual if existing else 0
     elif category:
         cost_price = existing.precio_costo if existing else parse_decimal("0")
         purchase_unit = existing.unidad_compra if existing else "unidad"
@@ -552,9 +562,7 @@ def extract_product_payload(existing=None):
         "imagen_url": final_image,
         "categoria_id": category.id if category else None,
         "producto_inventario_id": (
-            None
-            if category and category.envia_a_cocina
-            else (existing.producto_inventario_id if existing else None)
+            existing.producto_inventario_id if existing else None
         ),
         "es_inventario": False,
         "precio_costo": cost_price,
@@ -2377,6 +2385,8 @@ def ordenes():
 @web_bp.post("/ordenes")
 @feature_required("ordenes.create")
 def crear_orden():
+    from .fast_inventory import lock_operations
+    lock_operations()
     mesa_id = parse_int(request.form.get("mesa_id"))
     if mesa_id <= 0:
         mesa_id = parse_int(request.form.get("mesa_id_llevar"))
@@ -2691,6 +2701,8 @@ def ticket_division(division_id):
 @web_bp.post("/ordenes/<int:order_id>/items")
 @feature_required("ordenes.items")
 def agregar_item_orden(order_id):
+    from .fast_inventory import lock_operations
+    lock_operations()
     order = get_order(order_id)
     if order is None:
         flash("La orden no existe.", "error")
@@ -2890,11 +2902,11 @@ def preparar_item(item_id):
         flash("Ese item no puede pasar a listo desde tu rol o estado actual.", "error")
         return redirect(request.referrer or url_for("web.cocina"))
 
-    item.estado = "entregado"
+    item.estado = "listo" if item.orden.venta_rapida else "entregado"
     settle_order(item.orden)
     audit_event("preparar_item", "orden_item", item.id, f"Item #{item.id} preparado.")
     db.session.commit()
-    flash("El item quedo listo y entregado.", "success")
+    flash("Pedido listo para retirar." if item.orden.venta_rapida else "El item quedo listo y entregado.", "success")
     return redirect(request.referrer or url_for("web.cocina"))
 
 
@@ -3062,6 +3074,8 @@ def quitar_division(order_id):
 @web_bp.post("/divisiones/<int:division_id>/pagar")
 @feature_required("caja.charge")
 def pagar_division(division_id):
+    from .fast_inventory import lock_operations
+    lock_operations()
     division = (
         OrdenDivision.query.options(joinedload(OrdenDivision.orden).joinedload(Orden.mesa))
         .filter_by(id=division_id)
@@ -3148,6 +3162,8 @@ def pagar_division(division_id):
 @web_bp.post("/ordenes/<int:order_id>/pagar")
 @feature_required("caja.charge")
 def pagar_orden(order_id):
+    from .fast_inventory import lock_operations
+    lock_operations()
     order = get_order(order_id)
     if order is None:
         flash("La orden no existe.", "error")
@@ -3333,6 +3349,8 @@ def editar_producto(product_id):
 @web_bp.post("/productos/<int:product_id>")
 @feature_required("productos.edit")
 def actualizar_producto(product_id):
+    from .fast_inventory import lock_operations
+    lock_operations()
     product = get_producto(product_id)
     if product is None:
         flash("El producto no existe.", "error")
@@ -3443,7 +3461,7 @@ def caja():
     )
     return render_template(
         "cash.html",
-        page_title="Caja",
+        page_title="Caja por turno",
         session_open=session_open,
         expected_cash=session_cash_expected(session_open),
         card_total=session_card_total(session_open),
@@ -3452,17 +3470,26 @@ def caja():
             session_id=session_open.id if session_open else None
         ),
         closed_sessions=closed_sessions,
+        close_notes={s.id: s.corte for s in closed_sessions},
     )
 
 
 @web_bp.post("/caja/abrir")
 @feature_required("caja.open")
 def abrir_caja():
+    from .fast_inventory import lock_operations
+    lock_operations()
     if get_active_cash_session() is not None:
         flash("Ya existe una sesion de caja abierta.", "error")
         return redirect(url_for("web.caja"))
 
-    opening_amount = parse_decimal(request.form.get("opening_amount"))
+    from .fast_service import amount_value
+    try:
+        opening_amount = amount_value(request.form.get("opening_amount"))
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+        return redirect(url_for("web.caja"))
     if opening_amount < 0:
         flash("El monto de apertura no puede ser negativo.", "error")
         return redirect(url_for("web.caja"))
@@ -3483,6 +3510,8 @@ def abrir_caja():
 @web_bp.post("/caja/movimientos")
 @feature_required("caja.movements")
 def registrar_movimiento_caja():
+    from .fast_inventory import lock_operations
+    lock_operations()
     session_open = get_active_cash_session()
     if session_open is None:
         flash("No hay caja abierta.", "error")
@@ -3519,12 +3548,35 @@ def registrar_movimiento_caja():
 @web_bp.post("/caja/cerrar")
 @feature_required("caja.close")
 def cerrar_caja():
+    from .fast_inventory import lock_operations
+    from .fast_models import CierreTurno
+    lock_operations()
     session_open = get_active_cash_session()
     if session_open is None:
         flash("No hay una caja abierta para cerrar.", "error")
         return redirect(url_for("web.caja"))
 
-    closing_amount = parse_decimal(request.form.get("closing_amount"))
+    from .fast_service import amount_value
+    try:
+        closing_amount = amount_value(request.form.get("closing_amount"))
+    except ValueError as exc:
+        db.session.rollback()
+        flash(str(exc), "error")
+        return redirect(url_for("web.caja"))
+    if Orden.query.filter_by(sesion_caja_id=session_open.id, estado="abierta").first():
+        db.session.rollback()
+        flash("Cobra o cancela las cuentas abiertas antes de cerrar el turno.", "error")
+        return redirect(url_for("web.caja"))
+    expected = session_cash_expected(session_open)
+    notes = (request.form.get("notes") or "").strip()[:255]
+    difference = closing_amount - expected
+    if difference and not notes:
+        db.session.rollback()
+        flash("Indica el motivo de la diferencia de efectivo.", "error")
+        return redirect(url_for("web.caja"))
+    db.session.add(CierreTurno(sesion_id=session_open.id, usuario_id=current_user.id,
+        esperado=expected, contado=closing_amount, diferencia=difference,
+        ventas=session_sales_total(session_open), tarjetas=session_card_total(session_open), notas=notes))
     session_open.monto_cierre_real = closing_amount
     session_open.fecha_cierre = datetime.utcnow()
     session_open.estado = "cerrada"
@@ -3662,6 +3714,8 @@ def nuevo_movimiento_inventario():
 @web_bp.post("/inventario")
 @feature_required("inventario.create")
 def registrar_movimiento_inventario():
+    from .fast_inventory import lock_operations
+    lock_operations()
     raw_product_id = (request.form.get("product_id") or "").strip()
     product_id = parse_int(raw_product_id)
     purchase_source_type = (request.form.get("purchase_source_type") or "inventory").strip()
